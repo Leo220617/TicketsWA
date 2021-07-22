@@ -162,6 +162,46 @@ namespace WATickets.Controllers
             }
         }
 
+        [HttpPost]
+        public HttpResponseMessage Post([FromBody] Tickets t)
+        {
+            try
+            {
+
+
+                var ticket = db.Tickets.Where(a => a.id == t.id).FirstOrDefault();
+
+                if (ticket == null)
+                {
+                    ticket = new Tickets();
+                    
+                    ticket.FechaTicket = t.FechaTicket;
+                    ticket.Asunto = t.Asunto;
+                    ticket.Mensaje = t.Mensaje;
+                    ticket.Comentarios = t.Comentarios;
+                    ticket.idLoginAsignado = t.idLoginAsignado;
+                    ticket.Duracion = "00:00:00";
+                    ticket.PersonaTicket = t.PersonaTicket;
+                    ticket.Status = "E";
+                    ticket.idEmpresa = t.idEmpresa;
+                    db.Tickets.Add(ticket);
+                    db.SaveChanges();
+
+                }
+                else
+                {
+                    throw new Exception("ticket ya existe");
+                }
+
+                return Request.CreateResponse(HttpStatusCode.OK, ticket);
+            }
+            catch (Exception ex)
+            {
+
+                return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
+            }
+        }
+
 
         [HttpPut]
         [Route("api/Tiquetes/Actualizar")]
