@@ -28,5 +28,6 @@ namespace WATickets.Models.Cliente
         public string PersonaTicket { get; set; }
         public string Status { get; set; }
         public int idEmpresa { get; set; }
+        public string DuracionEstimada { get; set; }
     }
 }

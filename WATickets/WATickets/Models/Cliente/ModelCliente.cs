@@ -20,6 +20,7 @@ namespace WATickets.Models.Cliente
         public virtual DbSet<SeguridadRolesModulos> SeguridadRolesModulos { get; set; }
         public virtual DbSet<Tickets> Tickets { get; set; }
         public virtual DbSet<Empresas> Empresas { get; set; }
+        public virtual DbSet<Adjuntos> Adjuntos { get; set; }
 
         protected override void OnModelCreating(DbModelBuilder modelBuilder)
         {

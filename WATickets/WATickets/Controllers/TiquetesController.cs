@@ -87,6 +87,7 @@ namespace WATickets.Controllers
                     ti.Duracion = "00:00:00";
                     ti.PersonaTicket = item.Remitente;
                     ti.Status = "E";
+                    ti.DuracionEstimada = "00:00:00";
                     ti.idEmpresa = (db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault() == null ? 0 :db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault().id);
                     db.Tickets.Add(ti);
                     db.SaveChanges();
@@ -184,6 +185,7 @@ namespace WATickets.Controllers
                     ticket.PersonaTicket = t.PersonaTicket;
                     ticket.Status = "E";
                     ticket.idEmpresa = t.idEmpresa;
+                    ticket.DuracionEstimada = t.DuracionEstimada;
                     db.Tickets.Add(ticket);
                     db.SaveChanges();
 
@@ -219,6 +221,8 @@ namespace WATickets.Controllers
                     ticket.Duracion = t.Duracion;
                     ticket.idLoginAsignado = t.idLoginAsignado;
                     ticket.Comentarios = t.Comentarios;
+                    ticket.idEmpresa = t.idEmpresa;
+                    ticket.DuracionEstimada = t.DuracionEstimada;
                     ticket.Status = "A";
                     db.SaveChanges();
 
