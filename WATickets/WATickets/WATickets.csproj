@@ -228,6 +228,7 @@
     <Compile Include="Areas\HelpPage\SampleGeneration\TextSample.cs" />
     <Compile Include="Areas\HelpPage\XmlDocumentationProvider.cs" />
     <Compile Include="Controllers\AdjuntosController.cs" />
+    <Compile Include="Controllers\BitacoraErroresController.cs" />
     <Compile Include="Controllers\CorreosRecepcionController.cs" />
     <Compile Include="Controllers\EmpresasController.cs" />
     <Compile Include="Controllers\G.cs" />
@@ -246,6 +247,7 @@
     </Compile>
     <Compile Include="Models\Cliente\Adjuntos.cs" />
     <Compile Include="Models\Cliente\BandejaEntrada.cs" />
+    <Compile Include="Models\Cliente\BitacoraErrores.cs" />
     <Compile Include="Models\Cliente\CorreosRecepcion.cs" />
     <Compile Include="Models\Cliente\Empresas.cs" />
     <Compile Include="Models\Cliente\Login.cs" />

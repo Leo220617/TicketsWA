@@ -11,6 +11,7 @@ using System.Web.Http.Cors;
 using WATickets.Models;
 using S22.Imap;
 using WATickets.Models.Cliente;
+using Newtonsoft.Json;
 
 namespace WATickets.Controllers
 {
@@ -64,7 +65,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -104,7 +111,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -133,7 +146,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -158,7 +177,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -199,7 +224,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -217,6 +248,27 @@ namespace WATickets.Controllers
 
                 if (ticket != null)
                 {
+                    if(ticket.Status == "E")
+                    {
+                        var html = "<!DOCTYPE html> <html lang='es'> <head> <meta charset='UTF-8'> <meta http-equiv='X-UA-Compatible' content='IE=edge'> <meta name='viewport' content='width=device-width, initial-scale=1.0'> <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css' /> </head> <body> <div class='row'> <div class='col-sm-3'></div> <div class='col-sm-6' style='text-justify: center;'> <p>Estimado usuario se le ha asignado un nuevo ticket, abajo encontrará información mas detallada: </p> <ul> <li>ID: @ID</li> <li>Resumen: @Resumen</li> </ul> </div> <div class='col-sm-3'></div></div> </body> </html>";
+
+                        html = html.Replace("@ID", ticket.id.ToString());
+                        html = html.Replace("@Resumen", ticket.Asunto);
+                        var Usuario = db.Login.Where(a => a.id == t.idLoginAsignado).FirstOrDefault();
+                        var Correo = db.CorreosRecepcion.FirstOrDefault();
+                        G G = new G();
+                        var resp = G.SendV2(Usuario.Email, "", "", Correo.RecepcionEmail, "TICKET", "NUEVO TICKET ASIGNADO", html, Correo.RecepcionHostName, 587, Correo.RecepcionUseSSL.Value, Correo.RecepcionEmail, Correo.RecepcionPassword);
+                        if(!resp)
+                        {
+                            BitacoraErrores bt = new BitacoraErrores();
+                            bt.Descripcion = "Enviar correo";
+                            bt.StackTrace = "";
+                            bt.Fecha = DateTime.Now;
+                            bt.JSON = JsonConvert.SerializeObject(resp);
+                            db.BitacoraErrores.Add(bt);
+                            db.SaveChanges();
+                        }
+                    }
                     db.Entry(ticket).State = EntityState.Modified;
                     ticket.Duracion = t.Duracion;
                     ticket.idLoginAsignado = t.idLoginAsignado;
@@ -236,7 +288,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -270,14 +328,20 @@ namespace WATickets.Controllers
                 }
                 else
                 {
-                    throw new Exception("Rol no existe");
+                    throw new Exception("Tiquete no existe");
                 }
 
                 return Request.CreateResponse(HttpStatusCode.OK);
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }

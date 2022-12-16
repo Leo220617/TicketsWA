@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
@@ -37,7 +38,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-              
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -62,7 +69,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-               
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -97,7 +110,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-               
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -129,7 +148,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-               
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -161,7 +186,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-               
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }

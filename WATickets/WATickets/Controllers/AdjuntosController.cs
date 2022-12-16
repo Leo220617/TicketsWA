@@ -11,6 +11,8 @@ using System.Web.Http.Cors;
 using WATickets.Models;
 using S22.Imap;
 using WATickets.Models.Cliente;
+using Newtonsoft.Json;
+using Microsoft.Ajax.Utilities;
 
 namespace WATickets.Controllers
 {
@@ -45,7 +47,13 @@ namespace WATickets.Controllers
             }
             catch (Exception ex)
             {
-
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
@@ -82,6 +90,13 @@ namespace WATickets.Controllers
             catch (Exception ex)
             {
                 tr.Rollback();
+                BitacoraErrores bt = new BitacoraErrores();
+                bt.Descripcion = ex.Message;
+                bt.StackTrace = ex.StackTrace;
+                bt.Fecha = DateTime.Now;
+                bt.JSON = JsonConvert.SerializeObject(ex);
+                db.BitacoraErrores.Add(bt);
+                db.SaveChanges();
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
