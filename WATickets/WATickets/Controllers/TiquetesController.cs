@@ -45,8 +45,8 @@ namespace WATickets.Controllers
                         {
                             System.Net.Mail.MailMessage message = client.GetMessage(uid);
 
-                            if(message.Subject.ToUpper().Contains("Ticket".ToUpper()))
-                            {
+                            //if(message.Subject.ToUpper().Contains("Ticket".ToUpper()))
+                            //{
                                 BandejaEntrada bandeja = new BandejaEntrada();
                                 bandeja.Procesado = "0";
                                 bandeja.FechaIngreso = DateTime.Now;
@@ -56,7 +56,7 @@ namespace WATickets.Controllers
                                 bandeja.Texto = message.Body;
                                 db.BandejaEntrada.Add(bandeja);
                                 db.SaveChanges();
-                            }
+                            //}
                         }
                     }
                 }
@@ -140,6 +140,15 @@ namespace WATickets.Controllers
                     Tiquetes = Tiquetes.Where(a => a.idLoginAsignado == filtro.Codigo1).ToList();
                 }
 
+                if(!string.IsNullOrEmpty(filtro.Texto2) && filtro.Texto2 != "N")
+                {
+                    Tiquetes = Tiquetes.Where(a => a.Status == filtro.Texto2).ToList();
+                }
+
+                if (filtro.Codigo2 > 0)
+                {
+                    Tiquetes = Tiquetes.Where(a => a.idEmpresa == filtro.Codigo2).ToList();
+                }
 
                 return Request.CreateResponse(HttpStatusCode.OK, Tiquetes);
 
