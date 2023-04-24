@@ -12,6 +12,11 @@ using WATickets.Models;
 using S22.Imap;
 using WATickets.Models.Cliente;
 using Newtonsoft.Json;
+using System.IO;
+using System.Text;
+using System.ComponentModel;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Net.Mail;
 
 namespace WATickets.Controllers
 {
@@ -27,8 +32,8 @@ namespace WATickets.Controllers
             try
             {
                 var Correos = db.CorreosRecepcion.ToList();
-                
-                foreach(var item in Correos)
+
+                foreach (var item in Correos)
                 {
                     using (ImapClient client = new ImapClient(item.RecepcionHostName, (int)(item.RecepcionPort),
                           item.RecepcionEmail, item.RecepcionPassword, AuthMethod.Login, (bool)(item.RecepcionUseSSL)))
@@ -44,9 +49,59 @@ namespace WATickets.Controllers
                         foreach (var uid in uids)
                         {
                             System.Net.Mail.MailMessage message = client.GetMessage(uid);
-
-                            //if(message.Subject.ToUpper().Contains("Ticket".ToUpper()))
+                            byte[] ByteArrayPDF = new byte[0];
+                            var TipoAdjunto = "";
+                            //try
                             //{
+
+
+                            //    BinaryFormatter bf = new BinaryFormatter();
+                            //    using (MemoryStream ms = new MemoryStream())
+                            //    {
+                            //        bf.Serialize(ms, message);
+                            //       ByteArrayPDF = ms.ToArray();
+                            //    }
+                            //}
+                            //catch (Exception ex)
+                            //{
+                            //    BitacoraErrores bt = new BitacoraErrores();
+                            //    bt.Descripcion = ex.Message;
+                            //    bt.StackTrace = ex.StackTrace;
+                            //    bt.Fecha = DateTime.Now;
+                            //    bt.JSON = JsonConvert.SerializeObject(ex);
+                            //    db.BitacoraErrores.Add(bt);
+                            //    db.SaveChanges();
+                            //}
+
+
+
+
+                            if (message.Attachments.Count > 0)
+                            {
+                                try
+                                {
+                                    var attachment = message.Attachments.Where(a => !a.ContentId.ToUpper().Contains("@")).FirstOrDefault();
+                                    System.IO.StreamReader sr = new System.IO.StreamReader(attachment.ContentStream);
+                                    string texto = sr.ReadToEnd();
+                                    ByteArrayPDF = ((MemoryStream)attachment.ContentStream).ToArray();
+                                    TipoAdjunto = attachment.Name.Split('.')[1];
+
+                                }
+                                catch (Exception ex)
+                                {
+
+                                    BitacoraErrores bt = new BitacoraErrores();
+                                    bt.Descripcion = ex.Message;
+                                    bt.StackTrace = ex.StackTrace;
+                                    bt.Fecha = DateTime.Now;
+                                    bt.JSON = JsonConvert.SerializeObject(ex);
+                                    db.BitacoraErrores.Add(bt);
+                                    db.SaveChanges();
+                                }
+                            }
+                            var bandeja2 = db.BandejaEntrada.Where(a => a.Asunto == message.Subject && a.Remitente == message.From.Address).FirstOrDefault();
+                            if (!message.Subject.ToUpper().Contains("RE:".ToUpper()) && bandeja2 == null)
+                            {
                                 BandejaEntrada bandeja = new BandejaEntrada();
                                 bandeja.Procesado = "0";
                                 bandeja.FechaIngreso = DateTime.Now;
@@ -54,9 +109,12 @@ namespace WATickets.Controllers
                                 bandeja.Mensaje = "";
                                 bandeja.Remitente = message.From.Address;
                                 bandeja.Texto = message.Body;
+                                bandeja.Adjuntos = ByteArrayPDF;
+                                bandeja.TipoAdjunto = TipoAdjunto;
+                                
                                 db.BandejaEntrada.Add(bandeja);
                                 db.SaveChanges();
-                            //}
+                            }
                         }
                     }
                 }
@@ -82,8 +140,8 @@ namespace WATickets.Controllers
             try
             {
                 var Lista = db.BandejaEntrada.Where(a => a.Procesado == "0" && string.IsNullOrEmpty(a.Mensaje)).ToList();
-                
-                foreach(var item in Lista)
+
+                foreach (var item in Lista)
                 {
                     Tickets ti = new Tickets();
                     ti.FechaTicket = item.FechaIngreso;
@@ -95,7 +153,10 @@ namespace WATickets.Controllers
                     ti.PersonaTicket = item.Remitente;
                     ti.Status = "E";
                     ti.DuracionEstimada = "00:00:00";
-                    ti.idEmpresa = (db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault() == null ? 0 :db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault().id);
+                    ti.idEmpresa = (db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault() == null ? 0 : db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault().id);
+                    ti.Adjuntos = item.Adjuntos;
+                    ti.TipoAdjunto = item.TipoAdjunto;
+                    ti.FechaCierre = DateTime.Now;
                     db.Tickets.Add(ti);
                     db.SaveChanges();
 
@@ -128,19 +189,19 @@ namespace WATickets.Controllers
             try
             {
                 var time = new DateTime();
-                var Tiquetes = db.Tickets.Where(a => (filtro.FechaInicial != time ? a.FechaTicket >= filtro.FechaInicial && a.FechaTicket <= filtro.FechaFinal : true)  ).ToList();
+                var Tiquetes = db.Tickets.Where(a => (filtro.FechaInicial != time ? a.FechaTicket >= filtro.FechaInicial && a.FechaTicket <= filtro.FechaFinal : true)).ToList();
 
                 if (!string.IsNullOrEmpty(filtro.Texto))
                 {
                     Tiquetes = Tiquetes.Where(a => a.Asunto.ToUpper().Contains(filtro.Texto.ToUpper()) || a.Mensaje.ToUpper().Contains(filtro.Texto.ToUpper())).ToList();
                 }
 
-                if(filtro.Codigo1 > 0)
+                if (filtro.Codigo1 > 0)
                 {
                     Tiquetes = Tiquetes.Where(a => a.idLoginAsignado == filtro.Codigo1).ToList();
                 }
 
-                if(!string.IsNullOrEmpty(filtro.Texto2) && filtro.Texto2 != "N")
+                if (!string.IsNullOrEmpty(filtro.Texto2) && filtro.Texto2 != "N")
                 {
                     Tiquetes = Tiquetes.Where(a => a.Status == filtro.Texto2).ToList();
                 }
@@ -209,7 +270,7 @@ namespace WATickets.Controllers
                 if (ticket == null)
                 {
                     ticket = new Tickets();
-                    
+
                     ticket.FechaTicket = t.FechaTicket;
                     ticket.Asunto = t.Asunto;
                     ticket.Mensaje = t.Mensaje;
@@ -220,6 +281,7 @@ namespace WATickets.Controllers
                     ticket.Status = "E";
                     ticket.idEmpresa = t.idEmpresa;
                     ticket.DuracionEstimada = t.DuracionEstimada;
+                    ticket.FechaCierre = DateTime.Now;
                     db.Tickets.Add(ticket);
                     db.SaveChanges();
 
@@ -257,26 +319,55 @@ namespace WATickets.Controllers
 
                 if (ticket != null)
                 {
-                    if(ticket.Status == "E")
+                    if (ticket.Status == "E")
                     {
-                        var html = "<!DOCTYPE html> <html lang='es'> <head> <meta charset='UTF-8'> <meta http-equiv='X-UA-Compatible' content='IE=edge'> <meta name='viewport' content='width=device-width, initial-scale=1.0'> <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css' /> </head> <body> <div class='row'> <div class='col-sm-3'></div> <div class='col-sm-6' style='text-justify: center;'> <p>Estimado usuario se le ha asignado un nuevo ticket, abajo encontrará información mas detallada: </p> <ul> <li>ID: @ID</li> <li>Resumen: @Resumen</li> </ul> </div> <div class='col-sm-3'></div></div> </body> </html>";
-
-                        html = html.Replace("@ID", ticket.id.ToString());
-                        html = html.Replace("@Resumen", ticket.Asunto);
-                        var Usuario = db.Login.Where(a => a.id == t.idLoginAsignado).FirstOrDefault();
-                        var Correo = db.CorreosRecepcion.FirstOrDefault();
-                        G G = new G();
-                        var resp = G.SendV2(Usuario.Email, "", "", Correo.RecepcionEmail, "TICKET", "NUEVO TICKET ASIGNADO", html, Correo.RecepcionHostName, 587, Correo.RecepcionUseSSL.Value, Correo.RecepcionEmail, Correo.RecepcionPassword);
-                        if(!resp)
+                        try
                         {
+                            List<Attachment> adjuntos = new List<Attachment>();
+
+
+                            var html = "<!DOCTYPE html> <html lang='es'> <head> <meta charset='UTF-8'> <meta http-equiv='X-UA-Compatible' content='IE=edge'> <meta name='viewport' content='width=device-width, initial-scale=1.0'> <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css' /> </head> <body> <div class='row'> <div class='col-sm-3'></div> <div class='col-sm-6' style='text-justify: center;'> <p>Estimado usuario se le ha asignado un nuevo ticket, abajo encontrará información mas detallada: </p> <ul> <li>ID: @ID</li> <li>Resumen: @Resumen</li> </ul> </div> <div class='col-sm-3'></div></div> </body> </html>";
+
+                            html = html.Replace("@ID", ticket.id.ToString());
+                            html = html.Replace("@Resumen", ticket.Asunto + " <br> " + ticket.Mensaje);
+                            var Usuario = db.Login.Where(a => a.id == t.idLoginAsignado).FirstOrDefault();
+                            var Correo = db.CorreosRecepcion.FirstOrDefault();
+                            G G = new G();
+
+                            Attachment att = new Attachment(new MemoryStream(ticket.Adjuntos), "Adjunto." + ticket.TipoAdjunto);
+                            adjuntos.Add(att);
+
+
+
+                            var resp = G.SendV2(Usuario.Email, "", "", Correo.RecepcionEmail, "TICKET", "NUEVO TICKET ASIGNADO", html, Correo.RecepcionHostName, 587, Correo.RecepcionUseSSL.Value, Correo.RecepcionEmail, Correo.RecepcionPassword, adjuntos);
+                            if (!resp)
+                            {
+                                BitacoraErrores bt = new BitacoraErrores();
+                                bt.Descripcion = "Enviar correo";
+                                bt.StackTrace = "";
+                                bt.Fecha = DateTime.Now;
+                                bt.JSON = JsonConvert.SerializeObject(resp);
+                                db.BitacoraErrores.Add(bt);
+                                db.SaveChanges();
+                            }
+                        }
+                        catch (Exception ex )
+                        {
+
                             BitacoraErrores bt = new BitacoraErrores();
-                            bt.Descripcion = "Enviar correo";
-                            bt.StackTrace = "";
+                            bt.Descripcion = ex.Message;
+                            bt.StackTrace = ex.StackTrace;
                             bt.Fecha = DateTime.Now;
-                            bt.JSON = JsonConvert.SerializeObject(resp);
+                            bt.JSON = JsonConvert.SerializeObject(ex);
                             db.BitacoraErrores.Add(bt);
                             db.SaveChanges();
                         }
+                      
+
+
+
+
+
                     }
                     db.Entry(ticket).State = EntityState.Modified;
                     ticket.Duracion = t.Duracion;
@@ -322,16 +413,17 @@ namespace WATickets.Controllers
                 {
 
                     db.Entry(ticket).State = EntityState.Modified;
-                    if(ticket.Status == "A")
+                    if (ticket.Status == "A")
                     {
                         ticket.Status = "C";
+                        ticket.FechaCierre = DateTime.Now;
 
                     }
-                    else 
+                    else
                     {
                         ticket.Status = "A";
                     }
-                    
+
                     db.SaveChanges();
 
                 }

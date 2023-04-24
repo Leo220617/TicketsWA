@@ -29,5 +29,8 @@ namespace WATickets.Models.Cliente
         public string Status { get; set; }
         public int idEmpresa { get; set; }
         public string DuracionEstimada { get; set; }
+        public byte[] Adjuntos { get; set; }
+        public string TipoAdjunto { get; set; }
+        public DateTime FechaCierre { get; set; }
     }
 }
