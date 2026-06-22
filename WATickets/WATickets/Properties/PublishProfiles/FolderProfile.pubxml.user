@@ -103,10 +103,10 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>07/18/2022 17:22:37</publishTime>
     </File>
     <File Include="bin/es/Microsoft.VisualStudio.Shell.15.0.resources.dll">
-      <publishTime>07/18/2022 15:58:21</publishTime>
+      <publishTime>07/10/2025 09:18:38</publishTime>
     </File>
     <File Include="bin/es/Microsoft.VisualStudio.Shell.Design.resources.dll">
-      <publishTime>07/18/2022 17:22:48</publishTime>
+      <publishTime>07/10/2025 09:19:13</publishTime>
     </File>
     <File Include="bin/es/System.Net.Http.Formatting.resources.dll">
       <publishTime>12/15/2022 11:00:55</publishTime>
@@ -196,13 +196,13 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>07/18/2022 17:21:56</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.Shell.15.0.dll">
-      <publishTime>07/18/2022 17:21:54</publishTime>
+      <publishTime>07/10/2025 09:18:42</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.Shell.Design.dll">
-      <publishTime>07/18/2022 17:22:49</publishTime>
+      <publishTime>07/10/2025 09:19:15</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.Shell.Framework.dll">
-      <publishTime>07/18/2022 17:21:54</publishTime>
+      <publishTime>07/10/2025 09:18:42</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.Shell.Interop.8.0.dll">
       <publishTime>07/18/2022 17:21:56</publishTime>
@@ -220,10 +220,10 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>07/18/2022 17:21:56</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.TextTemplating.Interfaces.10.0.dll">
-      <publishTime>07/18/2022 17:24:19</publishTime>
+      <publishTime>07/10/2025 09:19:30</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.TextTemplating.Interfaces.11.0.dll">
-      <publishTime>07/18/2022 17:24:19</publishTime>
+      <publishTime>07/10/2025 09:19:30</publishTime>
     </File>
     <File Include="bin/Microsoft.VisualStudio.VSHelp.dll">
       <publishTime>07/18/2022 17:21:56</publishTime>
@@ -388,7 +388,7 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>12/15/2022 11:00:55</publishTime>
     </File>
     <File Include="bin/System.Threading.Tasks.Dataflow.dll">
-      <publishTime>07/18/2022 17:22:35</publishTime>
+      <publishTime>07/10/2025 09:19:02</publishTime>
     </File>
     <File Include="bin/System.Web.Cors.dll">
       <publishTime>12/15/2022 11:00:55</publishTime>
@@ -427,10 +427,10 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>07/18/2022 17:21:56</publishTime>
     </File>
     <File Include="bin/WATickets.dll">
-      <publishTime>02/20/2023 09:02:44</publishTime>
+      <publishTime>03/03/2026 10:27:19</publishTime>
     </File>
     <File Include="bin/WATickets.pdb">
-      <publishTime>02/20/2023 09:02:44</publishTime>
+      <publishTime>03/03/2026 10:27:19</publishTime>
     </File>
     <File Include="bin/WebGrease.dll">
       <publishTime>12/15/2022 11:00:56</publishTime>
@@ -526,7 +526,7 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>12/15/2022 11:00:54</publishTime>
     </File>
     <File Include="Web.config">
-      <publishTime>02/13/2023 15:35:02</publishTime>
+      <publishTime>02/22/2026 22:58:42</publishTime>
     </File>
   </ItemGroup>
 </Project>

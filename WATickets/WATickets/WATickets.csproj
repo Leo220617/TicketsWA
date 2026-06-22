@@ -227,6 +227,7 @@
     <Compile Include="Areas\HelpPage\SampleGeneration\SampleDirection.cs" />
     <Compile Include="Areas\HelpPage\SampleGeneration\TextSample.cs" />
     <Compile Include="Areas\HelpPage\XmlDocumentationProvider.cs" />
+    <Compile Include="Controllers\ActividadesController.cs" />
     <Compile Include="Controllers\AdjuntosController.cs" />
     <Compile Include="Controllers\BitacoraErroresController.cs" />
     <Compile Include="Controllers\CorreosRecepcionController.cs" />
@@ -238,6 +239,7 @@
     <Compile Include="Controllers\RolesController.cs" />
     <Compile Include="Controllers\SeguridadModulosController.cs" />
     <Compile Include="Controllers\SeguridadRolesModulosController.cs" />
+    <Compile Include="Controllers\TipoActividadesController.cs" />
     <Compile Include="Controllers\TiquetesController.cs" />
     <Compile Include="Controllers\TokenGenerator.cs" />
     <Compile Include="Controllers\TokenValidationHandler.cs" />
@@ -245,6 +247,9 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
+    <Compile Include="Models\ActividadesViewModel.cs" />
+    <Compile Include="Models\Cliente\Actividades.cs" />
+    <Compile Include="Models\Cliente\AdjuntosActividades.cs" />
     <Compile Include="Models\Cliente\Adjuntos.cs" />
     <Compile Include="Models\Cliente\BandejaEntrada.cs" />
     <Compile Include="Models\Cliente\BitacoraErrores.cs" />
@@ -256,6 +261,7 @@
     <Compile Include="Models\Cliente\SeguridadModulos.cs" />
     <Compile Include="Models\Cliente\SeguridadRolesModulos.cs" />
     <Compile Include="Models\Cliente\Tickets.cs" />
+    <Compile Include="Models\Cliente\TipoActividad.cs" />
     <Compile Include="Models\Filtros.cs" />
     <Compile Include="Models\IdentityModels.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
