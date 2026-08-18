@@ -26,6 +26,8 @@ namespace WATickets.Models.Cliente
         public virtual DbSet<TiposActividad> TiposActividad { get; set; }
         public virtual DbSet<Actividades> Actividades { get; set; }
         public virtual DbSet<AdjuntosActividades> AdjuntosActividades { get; set; }
+        public virtual DbSet<Respuestas> Respuestas { get; set; }
+        public virtual DbSet<CorreoEnvio> CorreoEnvio { get; set; }
 
 
 

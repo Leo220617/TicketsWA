@@ -65,7 +65,7 @@ namespace WATickets.Controllers
         /// <param name="html">Html del body del email a enviar</param>
         /// <returns>Retorna true si el envío fué correcto o false si falla</returns>
         public bool SendV2(string para, string copia, string copiaOculta, string de, string displayName, string asunto,
-            string html, string HostServer, int Puerto, bool EnableSSL, string UserName, string Password, List<Attachment> ArchivosAdjuntos = null)
+     string html, string HostServer, int Puerto, bool EnableSSL, string UserName, string Password, List<Attachment> ArchivosAdjuntos = null, string idCorreo = "")
         {
             try
             {
@@ -77,7 +77,23 @@ namespace WATickets.Controllers
 
                 // * mail.From = new MailAddress(WebConfigurationManager.AppSettings["UserName"], displayName);
                 mail.From = new MailAddress(de, displayName);
+                if (!string.IsNullOrEmpty(idCorreo))
+                {
+                    idCorreo = idCorreo.Trim();
 
+                    if (!idCorreo.StartsWith("<"))
+                    {
+                        idCorreo = "<" + idCorreo;
+                    }
+
+                    if (!idCorreo.EndsWith(">"))
+                    {
+                        idCorreo = idCorreo + ">";
+                    }
+
+                    mail.Headers.Add("In-Reply-To", idCorreo);
+                    mail.Headers.Add("References", idCorreo);
+                }
                 var paraList = para.Split(';');
                 foreach (var p in paraList)
                 {

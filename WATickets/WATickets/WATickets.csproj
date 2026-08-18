@@ -236,6 +236,7 @@
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\LoginController.cs" />
     <Compile Include="Controllers\ReportesController.cs" />
+    <Compile Include="Controllers\RespuestasController.cs" />
     <Compile Include="Controllers\RolesController.cs" />
     <Compile Include="Controllers\SeguridadModulosController.cs" />
     <Compile Include="Controllers\SeguridadRolesModulosController.cs" />
@@ -253,10 +254,12 @@
     <Compile Include="Models\Cliente\Adjuntos.cs" />
     <Compile Include="Models\Cliente\BandejaEntrada.cs" />
     <Compile Include="Models\Cliente\BitacoraErrores.cs" />
+    <Compile Include="Models\Cliente\CorreoEnvio.cs" />
     <Compile Include="Models\Cliente\CorreosRecepcion.cs" />
     <Compile Include="Models\Cliente\Empresas.cs" />
     <Compile Include="Models\Cliente\Login.cs" />
     <Compile Include="Models\Cliente\ModelCliente.cs" />
+    <Compile Include="Models\Cliente\Respuestas.cs" />
     <Compile Include="Models\Cliente\Roles.cs" />
     <Compile Include="Models\Cliente\SeguridadModulos.cs" />
     <Compile Include="Models\Cliente\SeguridadRolesModulos.cs" />

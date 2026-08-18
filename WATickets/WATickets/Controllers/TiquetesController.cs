@@ -111,7 +111,8 @@ namespace WATickets.Controllers
                                 bandeja.Texto = message.Body;
                                 bandeja.Adjuntos = ByteArrayPDF;
                                 bandeja.TipoAdjunto = TipoAdjunto;
-                                
+                                bandeja.idCorreo = message.Headers["Message-ID"];
+
                                 db.BandejaEntrada.Add(bandeja);
                                 db.SaveChanges();
                             }
@@ -156,6 +157,7 @@ namespace WATickets.Controllers
                     ti.idEmpresa = (db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault() == null ? 0 : db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault().id);
                     ti.Adjuntos = item.Adjuntos;
                     ti.TipoAdjunto = item.TipoAdjunto;
+                    ti.idCorreo = item.idCorreo;
                     ti.FechaCierre = DateTime.Now;
                     db.Tickets.Add(ti);
                     db.SaveChanges();
@@ -376,6 +378,7 @@ namespace WATickets.Controllers
                     ticket.idEmpresa = t.idEmpresa;
                     ticket.DuracionEstimada = t.DuracionEstimada;
                     ticket.Status = "A";
+                    ticket.Tipo = t.Tipo;
                     db.SaveChanges();
 
                 }

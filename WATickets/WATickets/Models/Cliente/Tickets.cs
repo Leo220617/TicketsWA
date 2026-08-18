@@ -32,5 +32,7 @@ namespace WATickets.Models.Cliente
         public byte[] Adjuntos { get; set; }
         public string TipoAdjunto { get; set; }
         public DateTime FechaCierre { get; set; }
+        public string idCorreo { get; set; }
+        public string Tipo { get; set; }
     }
 }

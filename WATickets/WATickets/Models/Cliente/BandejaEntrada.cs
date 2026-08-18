@@ -26,6 +26,7 @@ namespace WATickets.Models.Cliente
 
         public string Texto { get; set; }
         public byte[] Adjuntos { get; set; }
-        public string TipoAdjunto { get; set; } 
+        public string TipoAdjunto { get; set; }
+        public string idCorreo { get; set; }
     }
 }
