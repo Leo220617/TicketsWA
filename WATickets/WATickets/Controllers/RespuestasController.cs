@@ -254,14 +254,22 @@ namespace WATickets.Controllers
         {
             var imagenes = new List<Attachment>();
             var regex = new Regex(
-                @"data:(image\/(?:png|jpeg|jpg|gif|webp));base64,([A-Za-z0-9+\/=]+)",
-                RegexOptions.IgnoreCase
-            );
+      @"data:(image\/(?:png|jpeg|jpg|gif|webp));base64,([A-Za-z0-9+\/=\s]+)",
+      RegexOptions.IgnoreCase
+  );
 
             html = regex.Replace(html ?? "", match =>
             {
-                var contentType = match.Groups[1].Value.ToLowerInvariant();
-                var bytes = Convert.FromBase64String(match.Groups[2].Value);
+                var contentType =
+             match.Groups[1].Value.ToLowerInvariant();
+
+                var base64 = Regex.Replace(
+                    match.Groups[2].Value,
+                    @"\s+",
+                    ""
+                );
+
+                var bytes = Convert.FromBase64String(base64);
 
                 if (bytes.Length > 5 * 1024 * 1024)
                     throw new Exception("Una imagen pegada supera el límite permitido de 5 MB.");
