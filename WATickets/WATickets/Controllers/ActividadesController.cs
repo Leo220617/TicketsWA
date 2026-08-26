@@ -18,66 +18,143 @@ namespace WATickets.Controllers
     public class ActividadesController: ApiController
     {
         ModelCliente db = new ModelCliente();
-        public async Task<HttpResponseMessage> Get([FromUri] Filtros filtro)
+        public HttpResponseMessage Get([FromUri] Filtros filtro)
         {
             try
             {
-                var time = new DateTime();
-                var Actividades = db.Actividades.AsEnumerable()
-                    .Where(a => (filtro.FechaInicial != time ? a.fechaAgendada >= filtro.FechaInicial && a.fechaAgendada <= filtro.FechaFinal : true) &&
-                    (filtro.Codigo1 > 0 ? a.idUsuario == filtro.Codigo1 : true) && (filtro.Codigo2 > 0 ? a.idTipoActividad == filtro.Codigo2 : true)
-                    )
+                filtro = filtro ?? new Filtros();
+
+                var consulta = db.Actividades
+                    .AsNoTracking()
+                    .AsQueryable();
+
+                if (filtro.FechaInicial != DateTime.MinValue)
+                {
+                    var fechaInicial = filtro.FechaInicial.Date;
+
+                    consulta = consulta.Where(a =>
+                        a.fechaAgendada >= fechaInicial
+                    );
+                }
+
+                if (filtro.FechaFinal != DateTime.MinValue)
+                {
+                    var fechaFinal =
+                        filtro.FechaFinal.Date.AddDays(1);
+
+                    consulta = consulta.Where(a =>
+                        a.fechaAgendada < fechaFinal
+                    );
+                }
+
+                if (filtro.Codigo1 > 0)
+                {
+                    consulta = consulta.Where(a =>
+                        a.idUsuario == filtro.Codigo1
+                    );
+                }
+
+                if (filtro.Codigo2 > 0)
+                {
+                    consulta = consulta.Where(a =>
+                        a.idTipoActividad == filtro.Codigo2
+                    );
+                }
+
+                var actividades = consulta
+                    .OrderBy(a => a.fechaAgendada)
                     .Select(a => new
                     {
                         a.id,
                         a.idUsuario,
-                        NomUsuario = db.Login.Where(x => x.id == a.idUsuario).FirstOrDefault() == null ? "" : db.Login.Where(x => x.id == a.idUsuario).FirstOrDefault().Nombre,
-                        a.idEmpresa, 
-                        NomEmpresa = db.Empresas.Where(x => x.id == a.idEmpresa).FirstOrDefault() == null ? "" : db.Empresas.Where(x => x.id == a.idEmpresa).FirstOrDefault().Nombre,
-                        a.idTipoActividad, 
-                        NomActividad = db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault() == null ? "" : db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault().nombre,
+                        a.idEmpresa,
+                        a.idTipoActividad,
                         a.titulo,
                         a.fechaAgendada,
                         a.fechaCreacion,
                         a.estado,
                         a.comentario,
-                        tieneAdjunto = db.AdjuntosActividades.Where(x => x.idActividad == a.id).Any(),
-                        color = a.estado == "Realizado" ? "#28a745" :
-                                 a.estado == "Pendiente" ? "#ffc107" : "#dc3545",
+
+                        NomUsuario = db.Login
+                            .Where(u => u.id == a.idUsuario)
+                            .Select(u => u.Nombre)
+                            .FirstOrDefault(),
+
+                        NomEmpresa = db.Empresas
+                            .Where(e => e.id == a.idEmpresa)
+                            .Select(e => e.Nombre)
+                            .FirstOrDefault(),
+
+                        NomActividad = db.TiposActividad
+                            .Where(t => t.id == a.idTipoActividad)
+                            .Select(t => t.nombre)
+                            .FirstOrDefault()
+                    })
+                    .ToList()
+                    .Select(a => new
+                    {
+                        a.id,
+                        a.idUsuario,
+                        a.idEmpresa,
+                        a.idTipoActividad,
+                        a.titulo,
+                        a.fechaAgendada,
+                        a.fechaCreacion,
+                        a.estado,
+                        a.comentario,
+
+                        NomUsuario = a.NomUsuario ?? "Sin asignar",
+                        NomEmpresa = a.NomEmpresa ?? "Sin empresa",
+                        NomActividad = a.NomActividad ?? "Actividad",
+
                         start = a.fechaAgendada,
-                        title = (db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault() == null ? "" : db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault().nombre)  + " - "+ (db.Login.Where(x => x.id == a.idUsuario).FirstOrDefault() == null ? "" : db.Login.Where(x => x.id == a.idUsuario).FirstOrDefault().Nombre) + " - " + (db.Empresas.Where(x => x.id == a.idEmpresa).FirstOrDefault() == null ? "" : db.Empresas.Where(x => x.id == a.idEmpresa).FirstOrDefault().Nombre) ,
+
+                        title =
+                            (a.NomUsuario ?? "Sin asignar") +
+                            " · " +
+                            (a.titulo ?? a.NomActividad ?? "Actividad"),
+
+                        color = a.estado == "Realizado"
+                            ? "#1f7a45"
+                            : a.estado == "Cancelado"
+                                ? "#b12704"
+                                : "#0073bb",
+
                         extendedProps = new
                         {
+                            idUsuario = a.idUsuario,
                             tipo = a.idTipoActividad,
-                            estado = a.estado,
-                            comentario = a.titulo,
-                            tieneAdjunto =  db.AdjuntosActividades.Where(x => x.idActividad == a.id).Any(),
-                            NomActividad = db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault() == null ? "" : db.TiposActividad.Where(x => x.id == a.idTipoActividad).FirstOrDefault().nombre,
-                            start = a.fechaAgendada,
-                            adjuntos = db.AdjuntosActividades.Where(x => x.idActividad == a.id).ToList()
+                            estado = a.estado ?? "Pendiente",
+                            comentario = a.comentario ?? "",
+                            usuario = a.NomUsuario ?? "Sin asignar",
+                            empresa = a.NomEmpresa ?? "Sin empresa",
+                            actividad = a.NomActividad ?? "Actividad"
                         }
-
-
-                    } 
-                  
-                        )
+                    })
                     .ToList();
 
-               
-
-                return Request.CreateResponse(HttpStatusCode.OK, Actividades);
-
+                return Request.CreateResponse(
+                    HttpStatusCode.OK,
+                    actividades
+                );
             }
             catch (Exception ex)
             {
-                BitacoraErrores bt = new BitacoraErrores();
-                bt.Descripcion = ex.Message;
-                bt.StackTrace = ex.StackTrace;
-                bt.Fecha = DateTime.Now;
-                bt.JSON = JsonConvert.SerializeObject(ex);
-                db.BitacoraErrores.Add(bt);
+                var bitacora = new BitacoraErrores
+                {
+                    Descripcion = ex.Message,
+                    StackTrace = ex.StackTrace,
+                    Fecha = DateTime.Now,
+                    JSON = JsonConvert.SerializeObject(ex)
+                };
+
+                db.BitacoraErrores.Add(bitacora);
                 db.SaveChanges();
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
+
+                return Request.CreateResponse(
+                    HttpStatusCode.InternalServerError,
+                    ex
+                );
             }
         }
 
@@ -137,20 +214,7 @@ namespace WATickets.Controllers
                     db.SaveChanges();
 
 
-                    if (t.adjuntos_actividades == null)
-                    {
-                        t.adjuntos_actividades = new List<AdjuntosActividades>();
-                    }
-                    foreach (var adjunto in t.adjuntos_actividades)
-                    {
-                    
-                        AdjuntosActividades adj = new AdjuntosActividades();
-                        adj.idActividad = act.id;
-                        adj.Adjunto = adjunto.Adjunto;
-                        db.AdjuntosActividades.Add(adj);
-                        db.SaveChanges();
 
-                    }
                 }
                 else
                 {
@@ -172,41 +236,89 @@ namespace WATickets.Controllers
             }
         }
 
-
         [HttpPut]
         [Route("api/Actividades/Actualizar")]
-        public HttpResponseMessage Put([FromBody] ActividadesViewModel t)
+        public HttpResponseMessage Put(
+            [FromBody] ActividadesViewModel modelo)
         {
             try
             {
-
-
-                var ACT = db.Actividades.Where(a => a.id == t.id).FirstOrDefault();
-
-                if (ACT != null)
+                if (modelo == null || modelo.id <= 0)
                 {
-                    db.Entry(ACT).State = EntityState.Modified;
-                    ACT.estado = t.estado; 
-                    db.SaveChanges();
-
-                }
-                else
-                {
-                    throw new Exception("Actividad no existe");
+                    return Request.CreateResponse(
+                        HttpStatusCode.BadRequest,
+                        "La actividad no es válida."
+                    );
                 }
 
-                return Request.CreateResponse(HttpStatusCode.OK, ACT);
+                var actividad = db.Actividades.FirstOrDefault(
+                    a => a.id == modelo.id
+                );
+
+                if (actividad == null)
+                {
+                    return Request.CreateResponse(
+                        HttpStatusCode.NotFound,
+                        "La actividad no existe."
+                    );
+                }
+
+                if (!string.IsNullOrWhiteSpace(modelo.estado))
+                {
+                    actividad.estado = modelo.estado;
+                }
+
+                if (modelo.idUsuario > 0)
+                {
+                    actividad.idUsuario = modelo.idUsuario;
+                }
+
+                if (modelo.fechaAgendada != DateTime.MinValue)
+                {
+                    actividad.fechaAgendada =
+                        modelo.fechaAgendada;
+                }
+
+                if (modelo.idTipoActividad > 0)
+                {
+                    actividad.idTipoActividad =
+                        modelo.idTipoActividad;
+                }
+
+                if (!string.IsNullOrWhiteSpace(modelo.titulo))
+                {
+                    actividad.titulo = modelo.titulo.Trim();
+                }
+
+                if (modelo.comentario != null)
+                {
+                    actividad.comentario = modelo.comentario;
+                }
+
+                db.SaveChanges();
+
+                return Request.CreateResponse(
+                    HttpStatusCode.OK,
+                    actividad
+                );
             }
             catch (Exception ex)
             {
-                BitacoraErrores bt = new BitacoraErrores();
-                bt.Descripcion = ex.Message;
-                bt.StackTrace = ex.StackTrace;
-                bt.Fecha = DateTime.Now;
-                bt.JSON = JsonConvert.SerializeObject(ex);
-                db.BitacoraErrores.Add(bt);
+                var bitacora = new BitacoraErrores
+                {
+                    Descripcion = ex.Message,
+                    StackTrace = ex.StackTrace,
+                    Fecha = DateTime.Now,
+                    JSON = JsonConvert.SerializeObject(ex)
+                };
+
+                db.BitacoraErrores.Add(bitacora);
                 db.SaveChanges();
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
+
+                return Request.CreateResponse(
+                    HttpStatusCode.InternalServerError,
+                    ex
+                );
             }
         }
     }
