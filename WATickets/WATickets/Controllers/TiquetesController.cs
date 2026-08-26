@@ -48,10 +48,10 @@ namespace WATickets.Controllers
 
                 var bytes = Convert.FromBase64String(base64);
 
-                if (bytes.Length > 5 * 1024 * 1024)
+                if (bytes.Length > 18L * 1024 * 1024)
                 {
                     throw new Exception(
-                        "Una captura pegada supera el límite permitido de 5 MB."
+                        "Una captura pegada supera el límite permitido de 18 MB."
                     );
                 }
 
@@ -163,7 +163,178 @@ namespace WATickets.Controllers
 
             return texto.Trim();
         }
+        private static string ObtenerTipoContenido(string extension)
+        {
+            switch ((extension ?? "").TrimStart('.').ToLowerInvariant())
+            {
+                case "png":
+                    return "image/png";
 
+                case "jpg":
+                case "jpeg":
+                    return "image/jpeg";
+
+                case "pdf":
+                    return "application/pdf";
+
+                case "xls":
+                    return "application/vnd.ms-excel";
+
+                case "xlsx":
+                    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+                case "doc":
+                    return "application/msword";
+
+                case "docx":
+                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+                case "csv":
+                    return "text/csv";
+
+                default:
+                    return "application/octet-stream";
+            }
+        }
+        private void GuardarAdjuntosDelCorreo(
+          MailMessage mensaje,
+          int idTicket)
+        {
+            if (mensaje?.Attachments == null ||
+                mensaje.Attachments.Count == 0)
+            {
+                return;
+            }
+
+            const long limiteTotal =
+                18L * 1024 * 1024;
+
+            const int maximoArchivos = 5;
+
+            long tamanoAcumulado = 0;
+            int cantidadGuardada = 0;
+
+            string[] extensionesPermitidas =
+            {
+        "png", "jpg", "jpeg",
+        "pdf",
+        "xls", "xlsx",
+        "doc", "docx",
+        "csv"
+    };
+
+            foreach (Attachment archivo in mensaje.Attachments)
+            {
+                try
+                {
+                    // No guardar imágenes internas de firmas.
+                    if (archivo.ContentDisposition != null &&
+                        archivo.ContentDisposition.Inline)
+                    {
+                        continue;
+                    }
+
+                    if (cantidadGuardada >= maximoArchivos)
+                    {
+                        break;
+                    }
+
+                    var nombreArchivo =
+                        string.IsNullOrWhiteSpace(archivo.Name)
+                            ? "archivo"
+                            : Path.GetFileName(archivo.Name);
+
+                    var extension = Path
+                        .GetExtension(nombreArchivo)
+                        .TrimStart('.')
+                        .ToLowerInvariant();
+
+                    if (!extensionesPermitidas.Contains(
+                        extension))
+                    {
+                        continue;
+                    }
+
+                    byte[] contenido;
+
+                    using (var memoria = new MemoryStream())
+                    {
+                        if (archivo.ContentStream.CanSeek)
+                        {
+                            archivo.ContentStream.Position = 0;
+                        }
+
+                        archivo.ContentStream.CopyTo(memoria);
+                        contenido = memoria.ToArray();
+                    }
+
+                    if (contenido.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    if (contenido.Length > limiteTotal)
+                    {
+                        throw new Exception(
+                            "El archivo " + nombreArchivo +
+                            " supera el límite de 18 MB."
+                        );
+                    }
+
+                    if (tamanoAcumulado + contenido.Length >
+                        limiteTotal)
+                    {
+                        throw new Exception(
+                            "Los archivos recibidos superan " +
+                            "el límite total de 18 MB."
+                        );
+                    }
+
+                    var tipoContenido =
+                        archivo.ContentType?.MediaType;
+
+                    if (string.IsNullOrWhiteSpace(
+                        tipoContenido))
+                    {
+                        tipoContenido =
+                            ObtenerTipoContenido(extension);
+                    }
+
+                    var adjuntoDataUrl =
+                        "data:" + tipoContenido +
+                        ";name=" +
+                        Uri.EscapeDataString(nombreArchivo) +
+                        ";base64," +
+                        Convert.ToBase64String(contenido);
+
+                    db.Adjuntos.Add(new Adjuntos
+                    {
+                        idTicket = idTicket,
+                        Adjunto = adjuntoDataUrl
+                    });
+
+                    tamanoAcumulado += contenido.Length;
+                    cantidadGuardada++;
+                }
+                catch (Exception ex)
+                {
+                    db.BitacoraErrores.Add(
+                        new BitacoraErrores
+                        {
+                            Descripcion =
+                                "No se pudo guardar el archivo recibido '" +
+                                archivo.Name + "': " +
+                                ex.Message,
+
+                            StackTrace = ex.StackTrace,
+                            Fecha = DateTime.Now,
+                            JSON =
+                                JsonConvert.SerializeObject(ex)
+                        }
+                    );
+                }
+            }
+        }
         [Route("api/Tiquetes/RealizarLecturaEmail")]
 
         public async Task<HttpResponseMessage> GetRealizarLecturaEmailsAsync()
@@ -209,27 +380,76 @@ namespace WATickets.Controllers
 
 
 
-                            if (message.Attachments.Count > 0)
+                            if (message.Attachments != null &&
+          message.Attachments.Count > 0)
                             {
                                 try
                                 {
-                                    var attachment = message.Attachments.Where(a => !a.ContentId.ToUpper().Contains("@")).FirstOrDefault();
-                                    System.IO.StreamReader sr = new System.IO.StreamReader(attachment.ContentStream);
-                                    string texto = sr.ReadToEnd();
-                                    ByteArrayPDF = ((MemoryStream)attachment.ContentStream).ToArray();
-                                    TipoAdjunto = attachment.Name.Split('.')[1];
+                                    var attachment = message.Attachments
+                                        .Cast<System.Net.Mail.Attachment>()
+                                        .FirstOrDefault(a =>
+                                            a.ContentDisposition == null ||
+                                            !a.ContentDisposition.Inline
+                                        );
 
+                                    if (attachment != null)
+                                    {
+                                        using (var memoria = new MemoryStream())
+                                        {
+                                            if (attachment.ContentStream.CanSeek)
+                                            {
+                                                attachment.ContentStream.Position = 0;
+                                            }
+
+                                            attachment.ContentStream.CopyTo(memoria);
+                                            ByteArrayPDF = memoria.ToArray();
+                                        }
+
+                                        TipoAdjunto = Path
+                                            .GetExtension(attachment.Name ?? "")
+                                            .TrimStart('.')
+                                            .ToLowerInvariant();
+
+                                        string[] extensionesPermitidas =
+                                        {
+                "png", "jpg", "jpeg",
+                "pdf",
+                "xls", "xlsx",
+                "doc", "docx",
+                "csv"
+            };
+
+                                        if (!extensionesPermitidas.Contains(TipoAdjunto))
+                                        {
+                                            ByteArrayPDF = new byte[0];
+                                            TipoAdjunto = "";
+                                        }
+
+                                        // Máximo 18 MB.
+                                        if (ByteArrayPDF.Length > 18L * 1024 * 1024)
+                                        {
+                                            ByteArrayPDF = new byte[0];
+                                            TipoAdjunto = "";
+                                        }
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
+                                    var bt = new BitacoraErrores
+                                    {
+                                        Descripcion =
+                                            "Error leyendo el archivo recibido: " +
+                                            ex.Message,
+                                        StackTrace = ex.StackTrace,
+                                        Fecha = DateTime.Now,
+                                        JSON = JsonConvert.SerializeObject(ex)
+                                    };
 
-                                    BitacoraErrores bt = new BitacoraErrores();
-                                    bt.Descripcion = ex.Message;
-                                    bt.StackTrace = ex.StackTrace;
-                                    bt.Fecha = DateTime.Now;
-                                    bt.JSON = JsonConvert.SerializeObject(ex);
                                     db.BitacoraErrores.Add(bt);
                                     db.SaveChanges();
+
+                                    ByteArrayPDF = new byte[0];
+                                    TipoAdjunto = "";
                                 }
                             }
                             var messageId = message.Headers["Message-ID"];
@@ -237,12 +457,23 @@ namespace WATickets.Controllers
                             var references = message.Headers["References"] ?? "";
 
                             var ticketRelacionado = db.Tickets
-                                .Where(t => t.idCorreo != null && t.idCorreo != "")
-                                .ToList()
-                                .FirstOrDefault(t =>
-                                    inReplyTo.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                    references.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0
+          .Where(t => t.idCorreo != null && t.idCorreo != "")
+          .ToList()
+          .FirstOrDefault(t =>
+              inReplyTo.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0 ||
+              references.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0
+          );
+
+                            if (ticketRelacionado != null &&
+       ticketRelacionado.TicketPrincipalId.HasValue)
+                            {
+                                var idPrincipal =
+                                    ticketRelacionado.TicketPrincipalId.Value;
+
+                                ticketRelacionado = db.Tickets.FirstOrDefault(
+                                    t => t.id == idPrincipal
                                 );
+                            }
 
                             if (ticketRelacionado != null)
                             {
@@ -257,7 +488,16 @@ namespace WATickets.Controllers
                                 {
                                     var textoRespuesta = ObtenerUltimaRespuesta(message.Body);
 
-                                    if (!string.IsNullOrWhiteSpace(textoRespuesta))
+                                    var tieneAdjuntos = message.Attachments != null &&
+                      message.Attachments
+                          .Cast<Attachment>()
+                          .Any(a =>
+                              a.ContentDisposition == null ||
+                              !a.ContentDisposition.Inline
+                          );
+
+                                    if (!string.IsNullOrWhiteSpace(textoRespuesta) ||
+                                        tieneAdjuntos)
                                     {
                                         var nuevaRespuesta = new Respuestas
                                         {
@@ -265,13 +505,17 @@ namespace WATickets.Controllers
                                             idUsuario = 0,
 
                                             Respuesta =
-                                                "<div>" +
-                                                HttpUtility.HtmlEncode(textoRespuesta)
-                                                    .Replace("\r\n", "<br>")
-                                                    .Replace("\n", "<br>") +
-                                                "</div><!-- correo:" +
-                                                HttpUtility.HtmlEncode(messageId ?? "") +
-                                                " -->",
+                       "<div>" +
+    (
+        string.IsNullOrWhiteSpace(textoRespuesta)
+            ? "El cliente adjuntó uno o más archivos."
+            : HttpUtility.HtmlEncode(textoRespuesta)
+                .Replace("\r\n", "<br>")
+                .Replace("\n", "<br>")
+    ) +
+                               "</div><!-- correo:" +
+    HttpUtility.HtmlEncode(messageId ?? "") +
+    " -->",
 
                                             EsNotaInterna = false,
                                             FechaCreacion = DateTime.Now
@@ -279,7 +523,22 @@ namespace WATickets.Controllers
 
                                         db.Respuestas.Add(nuevaRespuesta);
 
+                                        // Guardar los archivos enviados en la respuesta del cliente.
+                                        GuardarAdjuntosDelCorreo(
+                                            message,
+                                            ticketRelacionado.id
+                                        );
+
+                                        // Registrar la fecha únicamente si estaba cerrado.
+                                        if (ticketRelacionado.Status == "C")
+                                        {
+                                            ticketRelacionado.FechaReapertura =
+                                                DateTime.Now;
+                                        }
+
+                                        // Si el cliente respondió, abrir nuevamente el ticket.
                                         ticketRelacionado.Status = "A";
+
                                         db.Entry(ticketRelacionado).State =
                                             EntityState.Modified;
 
@@ -359,6 +618,36 @@ namespace WATickets.Controllers
                     db.Tickets.Add(ti);
                     db.SaveChanges();
 
+                    // Guardar el archivo recibido en la tabla de adjuntos.
+                    if (item.Adjuntos != null &&
+                        item.Adjuntos.Length > 0)
+                    {
+                        var extension = (item.TipoAdjunto ?? "")
+                            .Trim()
+                            .TrimStart('.')
+                            .ToLowerInvariant();
+
+                        var tipoContenido = ObtenerTipoContenido(extension);
+
+                        var nombreArchivo = string.IsNullOrWhiteSpace(extension)
+                            ? "archivo"
+                            : "archivo-recibido." + extension;
+
+                        var adjuntoDataUrl =
+                            "data:" + tipoContenido +
+                            ";name=" + Uri.EscapeDataString(nombreArchivo) +
+                            ";base64," +
+                            Convert.ToBase64String(item.Adjuntos);
+
+                        db.Adjuntos.Add(new Adjuntos
+                        {
+                            idTicket = ti.id,
+                            Adjunto = adjuntoDataUrl
+                        });
+
+                        db.SaveChanges();
+                    }
+
                     db.Entry(item).State = EntityState.Modified;
                     item.FechaProcesado = DateTime.Now;
                     item.Procesado = "1";
@@ -383,46 +672,145 @@ namespace WATickets.Controllers
         }
 
 
-        public async Task<HttpResponseMessage> Get([FromUri] Filtros filtro)
+        public HttpResponseMessage Get(
+        [FromUri] Filtros filtro)
         {
             try
             {
-                var time = new DateTime();
-                var Tiquetes = db.Tickets.Where(a => (filtro.FechaInicial != time ? a.FechaTicket >= filtro.FechaInicial && a.FechaTicket <= filtro.FechaFinal : true)).ToList();
-
-                if (!string.IsNullOrEmpty(filtro.Texto))
+                if (filtro == null)
                 {
-                    Tiquetes = Tiquetes.Where(a => a.Asunto.ToUpper().Contains(filtro.Texto.ToUpper()) || a.Mensaje.ToUpper().Contains(filtro.Texto.ToUpper())).ToList();
+                    filtro = new Filtros();
+                }
+
+                var consulta = db.Tickets
+                    .AsNoTracking()
+                    .AsQueryable();
+
+                var fechaVacia = DateTime.MinValue;
+
+                // Aplicar fechas únicamente cuando sean válidas.
+                if (filtro.FechaInicial != fechaVacia)
+                {
+                    var fechaInicial =
+                        filtro.FechaInicial.Date;
+
+                    consulta = consulta.Where(ticket =>
+                        ticket.FechaTicket >= fechaInicial
+                    );
+                }
+
+                if (filtro.FechaFinal != fechaVacia)
+                {
+                    // Incluye todo el día final.
+                    var fechaFinalExclusiva =
+                        filtro.FechaFinal.Date.AddDays(1);
+
+                    consulta = consulta.Where(ticket =>
+                        ticket.FechaTicket <
+                        fechaFinalExclusiva
+                    );
+                }
+
+                if (!string.IsNullOrWhiteSpace(filtro.Texto))
+                {
+                    var texto = filtro.Texto.Trim();
+
+                    consulta = consulta.Where(ticket =>
+                        (ticket.Asunto != null &&
+                         ticket.Asunto.Contains(texto))
+                        ||
+                        (ticket.Mensaje != null &&
+                         ticket.Mensaje.Contains(texto))
+                    );
                 }
 
                 if (filtro.Codigo1 > 0)
                 {
-                    Tiquetes = Tiquetes.Where(a => a.idLoginAsignado == filtro.Codigo1).ToList();
-                }
-
-                if (!string.IsNullOrEmpty(filtro.Texto2) && filtro.Texto2 != "N")
-                {
-                    Tiquetes = Tiquetes.Where(a => a.Status == filtro.Texto2).ToList();
+                    consulta = consulta.Where(ticket =>
+                        ticket.idLoginAsignado ==
+                        filtro.Codigo1
+                    );
                 }
 
                 if (filtro.Codigo2 > 0)
                 {
-                    Tiquetes = Tiquetes.Where(a => a.idEmpresa == filtro.Codigo2).ToList();
+                    consulta = consulta.Where(ticket =>
+                        ticket.idEmpresa ==
+                        filtro.Codigo2
+                    );
                 }
 
-                return Request.CreateResponse(HttpStatusCode.OK, Tiquetes);
+                if (!string.IsNullOrWhiteSpace(filtro.Texto2) &&
+                    filtro.Texto2 != "N")
+                {
+                    if (filtro.Texto2 == "AV")
+                    {
+                        consulta = consulta.Where(ticket =>
+                            ticket.Status == "A" ||
+                            ticket.Status == "V"
+                        );
+                    }
+                    else
+                    {
+                        var estado = filtro.Texto2;
 
+                        consulta = consulta.Where(ticket =>
+                            ticket.Status == estado
+                        );
+                    }
+                }
+                if (!string.IsNullOrWhiteSpace(filtro.Texto3) &&
+    filtro.Texto3 != "N")
+                {
+                    var tipo = filtro.Texto3.Trim();
+
+                    consulta = consulta.Where(ticket =>
+                        ticket.Tipo == tipo
+                    );
+                }
+
+                var tiquetes = consulta
+                    .OrderByDescending(ticket =>
+                        ticket.FechaTicket
+                    )
+                .Select(ticket => new
+                {
+                    ticket.id,
+                    ticket.FechaTicket,
+                    FechaReapertura = (DateTime?)ticket.FechaReapertura,
+                    ticket.Asunto,
+                    ticket.idLoginAsignado,
+                    ticket.Duracion,
+                    ticket.DuracionEstimada,
+                    ticket.idEmpresa,
+                    ticket.Status,
+                    ticket.PersonaTicket,
+                    ticket.Tipo
+                })
+                    .ToList();
+
+                return Request.CreateResponse(
+                    HttpStatusCode.OK,
+                    tiquetes
+                );
             }
             catch (Exception ex)
             {
-                BitacoraErrores bt = new BitacoraErrores();
-                bt.Descripcion = ex.Message;
-                bt.StackTrace = ex.StackTrace;
-                bt.Fecha = DateTime.Now;
-                bt.JSON = JsonConvert.SerializeObject(ex);
-                db.BitacoraErrores.Add(bt);
+                var bitacora = new BitacoraErrores
+                {
+                    Descripcion = ex.Message,
+                    StackTrace = ex.StackTrace,
+                    Fecha = DateTime.Now,
+                    JSON = JsonConvert.SerializeObject(ex)
+                };
+
+                db.BitacoraErrores.Add(bitacora);
                 db.SaveChanges();
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
+
+                return Request.CreateResponse(
+                    HttpStatusCode.InternalServerError,
+                    ex
+                );
             }
         }
 
@@ -482,7 +870,7 @@ namespace WATickets.Controllers
                     ticket.DuracionEstimada = t.DuracionEstimada;
                     ticket.FechaCierre = DateTime.Now;
 
-                    
+
 
                     db.Tickets.Add(ticket);
                     db.SaveChanges();
@@ -515,196 +903,350 @@ namespace WATickets.Controllers
         {
             try
             {
+                var ticket = db.Tickets.FirstOrDefault(
+                    a => a.id == t.id
+                );
 
-
-                var ticket = db.Tickets.Where(a => a.id == t.id).FirstOrDefault();
-
-                if (ticket != null)
+                if (ticket == null)
                 {
-                    if (ticket.Status == "E")
+                    throw new Exception("El tiquete no existe.");
+                }
+
+                var estadoAnterior = ticket.Status;
+
+                var seEstaCerrando = estadoAnterior != "C" && t.Status == "C";
+
+                // Enviar correo de asignación únicamente si no se está cerrando.
+                if (estadoAnterior == "E" && t.Status != "C")
+                {
+                    try
                     {
-                        try
+                        var usuario = db.Login.FirstOrDefault(
+                            a => a.id == t.idLoginAsignado
+                        );
+
+                        if (usuario == null)
                         {
-                            var Usuario = db.Login
-                                .FirstOrDefault(a => a.id == t.idLoginAsignado);
-
-                            if (Usuario == null)
-                            {
-                                throw new Exception(
-                                    "El usuario asignado no existe."
-                                );
-                            }
-
-                            var Correo = db.CorreosRecepcion.FirstOrDefault();
-
-                            if (Correo == null)
-                            {
-                                throw new Exception(
-                                    "No existe configuración de correo."
-                                );
-                            }
-
-                            var html =
-                                "<!DOCTYPE html>" +
-                                "<html lang='es'>" +
-                                "<head>" +
-                                "<meta charset='UTF-8'>" +
-                                "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
-                                "</head>" +
-                                "<body style='font-family: Arial, sans-serif;'>" +
-                                "<div style='max-width: 700px; margin: auto;'>" +
-                                "<p>Estimado usuario, se le ha asignado un nuevo ticket:</p>" +
-                                "<p><strong>ID:</strong> @ID</p>" +
-                                "<p><strong>Asunto:</strong> @ASUNTO</p>" +
-                                "<div style='margin-top: 20px;'>@MENSAJE</div>" +
-                                "</div>" +
-                                "</body>" +
-                                "</html>";
-
-                            html = html.Replace(
-                                "@ID",
-                                ticket.id.ToString()
-                            );
-
-                            html = html.Replace(
-                                "@ASUNTO",
-                                HttpUtility.HtmlEncode(ticket.Asunto ?? "")
-                            );
-
-                            // Mensaje contiene el texto y las capturas pegadas en Base64.
-                            html = html.Replace(
-                                "@MENSAJE",
-                                ticket.Mensaje ?? ""
-                            );
-
-                            // Convierte las capturas Base64 en imágenes dentro del correo.
-                            var imagenesInline =
-                                PrepararImagenesInlineTicket(ref html);
-
-                            G G = new G();
-
-                            var resp = G.SendV2(
-                                Usuario.Email,
-                                "",
-                                "",
-                                Correo.RecepcionEmail,
-                                "TICKET",
-                                "NUEVO TICKET ASIGNADO",
-                                html,
-                                Correo.RecepcionHostName,
-                                587,
-                                Correo.RecepcionUseSSL.Value,
-                                Correo.RecepcionEmail,
-                                Correo.RecepcionPassword,
-                                imagenesInline
-                            );
-
-                            if (!resp)
-                            {
-                                throw new Exception(
-                                    "No se pudo enviar el correo del ticket."
-                                );
-                            }
+                            throw new Exception("El usuario asignado no existe.");
                         }
-                        catch (Exception ex)
-                        {
-                            BitacoraErrores bt = new BitacoraErrores();
-                            bt.Descripcion = ex.Message;
-                            bt.StackTrace = ex.StackTrace;
-                            bt.Fecha = DateTime.Now;
-                            bt.JSON = JsonConvert.SerializeObject(ex);
 
-                            db.BitacoraErrores.Add(bt);
-                            db.SaveChanges();
+                        var correo = db.CorreosRecepcion.FirstOrDefault();
+
+                        if (correo == null)
+                        {
+                            throw new Exception(
+                                "No existe configuración de correo."
+                            );
+                        }
+
+                        var html =
+                            "<!DOCTYPE html>" +
+                            "<html lang='es'>" +
+                            "<head>" +
+                            "<meta charset='UTF-8'>" +
+                            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+                            "</head>" +
+                            "<body style='font-family:Arial,sans-serif;'>" +
+                            "<div style='max-width:700px;margin:auto;'>" +
+                            "<p>Estimado usuario, se le ha asignado un nuevo tiquete:</p>" +
+                            "<p><strong>ID:</strong> @ID</p>" +
+                            "<p><strong>Asunto:</strong> @ASUNTO</p>" +
+                            "<div style='margin-top:20px;'>@MENSAJE</div>" +
+                            "</div>" +
+                            "</body>" +
+                            "</html>";
+
+                        html = html.Replace(
+                            "@ID",
+                            ticket.id.ToString()
+                        );
+
+                        html = html.Replace(
+                            "@ASUNTO",
+                            HttpUtility.HtmlEncode(
+                                ticket.Asunto ?? ""
+                            )
+                        );
+
+                        html = html.Replace(
+                            "@MENSAJE",
+                            ticket.Mensaje ?? ""
+                        );
+
+                        var imagenesInline =
+                            PrepararImagenesInlineTicket(ref html);
+
+                        var servicioCorreo = new G();
+
+                        var enviado = servicioCorreo.SendV2(
+                            usuario.Email,
+                            "",
+                            "",
+                            correo.RecepcionEmail,
+                            "TICKET",
+                            "NUEVO TIQUETE ASIGNADO",
+                            html,
+                            correo.RecepcionHostName,
+                            587,
+                            correo.RecepcionUseSSL.Value,
+                            correo.RecepcionEmail,
+                            correo.RecepcionPassword,
+                            imagenesInline
+                        );
+
+                        if (!enviado)
+                        {
+                            throw new Exception(
+                                "No se pudo enviar el correo de asignación."
+                            );
                         }
                     }
-                    db.Entry(ticket).State = EntityState.Modified;
-                    ticket.Duracion = t.Duracion;
-                    ticket.idLoginAsignado = t.idLoginAsignado;
-                    ticket.Comentarios = t.Comentarios;
-                    ticket.idEmpresa = t.idEmpresa;
-                    ticket.DuracionEstimada = t.DuracionEstimada;
-                    ticket.Status = t.Status;
-
-                    if (t.Status == "C")
+                    catch (Exception ex)
                     {
-                        ticket.FechaCierre = DateTime.Now;
+                        var bitacoraAsignacion = new BitacoraErrores
+                        {
+                            Descripcion = ex.Message,
+                            StackTrace = ex.StackTrace,
+                            Fecha = DateTime.Now,
+                            JSON = JsonConvert.SerializeObject(ex)
+                        };
+
+                        db.BitacoraErrores.Add(bitacoraAsignacion);
+                        db.SaveChanges();
                     }
-
-                    ticket.Tipo = t.Tipo;
-                    db.SaveChanges();
-
                 }
-                else
+
+                if (seEstaCerrando)
                 {
-                    throw new Exception("ticket no existe");
+                    // Si falla el correo, se genera la excepción
+                    // y el tiquete no se cierra.
+                    EnviarNotificacionCierre(ticket);
                 }
+
+                db.Entry(ticket).State = EntityState.Modified;
+
+                ticket.Duracion = t.Duracion;
+                ticket.idLoginAsignado = t.idLoginAsignado;
+                ticket.Comentarios = t.Comentarios;
+                ticket.idEmpresa = t.idEmpresa;
+                ticket.DuracionEstimada = t.DuracionEstimada;
+                ticket.Status = t.Status;
+                ticket.Tipo = t.Tipo;
+
+                if (seEstaCerrando)
+                {
+                    ticket.FechaCierre = DateTime.Now;
+                }
+
+                db.SaveChanges();
 
                 return Request.CreateResponse(HttpStatusCode.OK, ticket);
             }
             catch (Exception ex)
             {
-                BitacoraErrores bt = new BitacoraErrores();
-                bt.Descripcion = ex.Message;
-                bt.StackTrace = ex.StackTrace;
-                bt.Fecha = DateTime.Now;
-                bt.JSON = JsonConvert.SerializeObject(ex);
-                db.BitacoraErrores.Add(bt);
+                var bitacora = new BitacoraErrores
+                {
+                    Descripcion = ex.Message,
+                    StackTrace = ex.StackTrace,
+                    Fecha = DateTime.Now,
+                    JSON = JsonConvert.SerializeObject(ex)
+                };
+
+                db.BitacoraErrores.Add(bitacora);
                 db.SaveChanges();
+
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
+        private void EnviarNotificacionCierre(Tickets ticket)
+        {
+            if (ticket == null)
+            {
+                throw new Exception(
+                    "El tiquete no existe."
+                );
+            }
 
+            if (string.IsNullOrWhiteSpace(ticket.PersonaTicket))
+            {
+                throw new Exception(
+                    "El tiquete no tiene un correo registrado."
+                );
+            }
+
+            var correoEnvio = db.CorreoEnvio.FirstOrDefault();
+
+            if (correoEnvio == null)
+            {
+                throw new Exception(
+                    "No existe una configuración para enviar correos."
+                );
+            }
+
+            if (correoEnvio.EnvioPort == null ||
+                correoEnvio.RecepcionUseSSL == null)
+            {
+                throw new Exception(
+                    "La configuración del correo está incompleta."
+                );
+            }
+
+            var asuntoTicket = HttpUtility.HtmlEncode(
+                ticket.Asunto ?? ""
+            );
+
+            var html =
+                "<!DOCTYPE html>" +
+                "<html lang='es'>" +
+                "<head>" +
+                "<meta charset='UTF-8'>" +
+                "<meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+                "</head>" +
+                "<body style='margin:0;padding:0;background:#f2f3f3;font-family:Arial,sans-serif;color:#161e2d;'>" +
+                "<table width='100%' cellspacing='0' cellpadding='0' style='background:#f2f3f3;padding:30px 15px;'>" +
+                "<tr><td align='center'>" +
+                "<table width='650' cellspacing='0' cellpadding='0' style='max-width:650px;width:100%;background:#ffffff;border:1px solid #d5dbdb;'>" +
+
+                "<tr>" +
+                "<td style='background:#131e29;border-bottom:4px solid #ff9900;padding:22px 28px;color:#ffffff;'>" +
+                "<div style='font-size:12px;color:#aab7b8;'>SOPORTE</div>" +
+                "<div style='font-size:22px;font-weight:bold;margin-top:5px;'>Tiquete cerrado</div>" +
+                "</td>" +
+                "</tr>" +
+
+                "<tr>" +
+                "<td style='padding:28px;'>" +
+                "<p style='margin-top:0;'>Hola,</p>" +
+                "<p>Le informamos que su solicitud de soporte fue cerrada.</p>" +
+
+                "<div style='background:#f7f8f8;border-left:4px solid #ff9900;padding:18px;margin:22px 0;line-height:1.6;'>" +
+                "<strong>Tiquete:</strong> #" + ticket.id + "<br>" +
+                "<strong>Asunto:</strong> " + asuntoTicket +
+                "</div>" +
+
+                "<p>Si necesita información adicional, puede responder a este correo y el tiquete será abierto nuevamente.</p>" +
+
+                "<p style='font-size:13px;color:#687078;margin-bottom:0;margin-top:25px;'>" +
+                "Equipo de soporte" +
+                "</p>" +
+                "</td>" +
+                "</tr>" +
+
+                "</table>" +
+                "</td></tr>" +
+                "</table>" +
+                "</body>" +
+                "</html>";
+
+            var asuntoCorreo = ticket.Asunto == null
+                ? ""
+                : ticket.Asunto.Trim();
+
+            if (!asuntoCorreo.StartsWith(
+                "RE:",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                asuntoCorreo = "Re: " + asuntoCorreo;
+            }
+
+            var servicioCorreo = new G();
+
+            var enviado = servicioCorreo.SendV2(
+                ticket.PersonaTicket,
+                "",
+                "",
+                correoEnvio.RecepcionEmail,
+                "TICKETS",
+                asuntoCorreo,
+                html,
+                correoEnvio.RecepcionHostName,
+                correoEnvio.EnvioPort,
+                correoEnvio.RecepcionUseSSL,
+                correoEnvio.RecepcionEmail,
+                correoEnvio.RecepcionPassword,
+                null,
+                ticket.idCorreo
+            );
+
+            if (!enviado)
+            {
+                throw new Exception(
+                    "No se pudo enviar la notificación de cierre a " +
+                    ticket.PersonaTicket +
+                    "."
+                );
+            }
+        }
         [HttpDelete]
         [Route("api/Tiquetes/Eliminar")]
         public HttpResponseMessage Delete([FromUri] int id)
         {
             try
             {
+                var ticket = db.Tickets.FirstOrDefault(
+                    x => x.id == id
+                );
 
-
-                var ticket = db.Tickets.Where(a => a.id == id).FirstOrDefault();
-
-                if (ticket != null)
+                if (ticket == null)
                 {
+                    throw new Exception(
+                        "El tiquete no existe."
+                    );
+                }
 
-                    db.Entry(ticket).State = EntityState.Modified;
-                    if (ticket.Status == "A")
-                    {
-                        ticket.Status = "C";
-                        ticket.FechaCierre = DateTime.Now;
+                db.Entry(ticket).State =
+                    EntityState.Modified;
 
-                    }
-                    else
-                    {
-                        ticket.Status = "A";
-                    }
+                if (ticket.Status == "C")
+                {
+                    ticket.Status = "A";
+                    ticket.FechaReapertura = DateTime.Now;
 
                     db.SaveChanges();
 
-                }
-                else
-                {
-                    throw new Exception("Tiquete no existe");
+                    return Request.CreateResponse(
+                        HttpStatusCode.OK,
+                        new
+                        {
+                            cerrado = false,
+                            fechaReapertura = ticket.FechaReapertura,
+                            mensaje = "El tiquete fue abierto correctamente."
+                        }
+                    );
                 }
 
-                return Request.CreateResponse(HttpStatusCode.OK);
+
+                EnviarNotificacionCierre(ticket);
+
+                ticket.Status = "C";
+                ticket.FechaCierre = DateTime.Now;
+
+                db.SaveChanges();
+
+                return Request.CreateResponse(HttpStatusCode.OK, new { cerrado = true, mensaje = "El tiquete fue cerrado y el cliente fue notificado." });
             }
             catch (Exception ex)
             {
-                BitacoraErrores bt = new BitacoraErrores();
-                bt.Descripcion = ex.Message;
-                bt.StackTrace = ex.StackTrace;
-                bt.Fecha = DateTime.Now;
-                bt.JSON = JsonConvert.SerializeObject(ex);
-                db.BitacoraErrores.Add(bt);
+                var bitacora = new BitacoraErrores
+                {
+                    Descripcion = ex.Message,
+                    StackTrace = ex.StackTrace,
+                    Fecha = DateTime.Now,
+                    JSON = JsonConvert.SerializeObject(ex)
+                };
+
+                db.BitacoraErrores.Add(bitacora);
                 db.SaveChanges();
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
+
+                return Request.CreateResponse(
+                    HttpStatusCode.InternalServerError,
+                    ex.Message
+                );
             }
         }
         [HttpGet]
         [Route("api/Tiquetes/LeerRespuestasTicket")]
-        public HttpResponseMessage GetLeerRespuestasTicket( [FromUri] int id)
+        public HttpResponseMessage GetLeerRespuestasTicket([FromUri] int id)
         {
             try
             {
@@ -717,10 +1259,17 @@ namespace WATickets.Controllers
                 }
 
                 var ticket = db.Tickets.FirstOrDefault(t => t.id == id);
+                if (ticket != null && ticket.TicketPrincipalId.HasValue)
+                {
+                    var idPrincipal = ticket.TicketPrincipalId.Value;
 
+                    ticket = db.Tickets.FirstOrDefault(
+                        t => t.id == idPrincipal
+                    );
+                }
                 if (ticket == null)
                 {
-                    return Request.CreateResponse(  HttpStatusCode.NotFound,"El ticket no existe.");
+                    return Request.CreateResponse(HttpStatusCode.NotFound, "El ticket no existe.");
                 }
 
                 if (string.IsNullOrWhiteSpace(ticket.idCorreo))
@@ -796,24 +1345,41 @@ namespace WATickets.Controllers
                                 continue;
                             }
 
-                            var textoRespuesta = ObtenerUltimaRespuesta(mensaje.Body);
+                            var textoRespuesta =
+     ObtenerUltimaRespuesta(mensaje.Body);
 
-                            if (string.IsNullOrWhiteSpace(textoRespuesta))
+                            var tieneAdjuntos =
+                                mensaje.Attachments != null &&
+                                mensaje.Attachments
+                                    .Cast<Attachment>()
+                                    .Any(a =>
+                                        a.ContentDisposition == null ||
+                                        !a.ContentDisposition.Inline
+                                    );
+
+                            // Ignorar solamente si no tiene texto ni archivos.
+                            if (string.IsNullOrWhiteSpace(textoRespuesta) &&
+                                !tieneAdjuntos)
                             {
                                 client.GetMessage(uid, true);
                                 continue;
                             }
 
+                            var contenidoRespuesta =
+                                string.IsNullOrWhiteSpace(textoRespuesta)
+                                    ? "El cliente adjuntó uno o más archivos."
+                                    : HttpUtility.HtmlEncode(textoRespuesta)
+                                        .Replace("\r\n", "<br>")
+                                        .Replace("\n", "<br>");
+
                             var nuevaRespuesta = new Respuestas
                             {
                                 idTicket = ticket.id,
-                                idUsuario = null,
+                                idUsuario = 0,
 
                                 Respuesta =
                                     "<div>" +
-                                    HttpUtility.HtmlEncode(textoRespuesta)
-                                        .Replace("\r\n", "<br>")
-                                        .Replace("\n", "<br>") +
+                                    contenidoRespuesta +
                                     "</div><!-- correo:" +
                                     HttpUtility.HtmlEncode(messageId ?? "") +
                                     " -->",
@@ -824,10 +1390,24 @@ namespace WATickets.Controllers
 
                             db.Respuestas.Add(nuevaRespuesta);
 
-                            // Si el cliente respondió, reabrir el ticket.
+                            // Guardar PDF, Excel, Word, imágenes y demás archivos.
+                            GuardarAdjuntosDelCorreo(
+                                mensaje,
+                                ticket.id
+                            );
+
+                            // Registrar la fecha únicamente si estaba cerrado.
+                            if (ticket.Status == "C")
+                            {
+                                ticket.FechaReapertura = DateTime.Now;
+                            }
+
+                            // Reabrir el ticket cuando responde el cliente.
                             ticket.Status = "A";
-   
-                            db.Entry(ticket).State = EntityState.Modified;
+
+                            db.Entry(ticket).State =
+                                EntityState.Modified;
+
                             db.SaveChanges();
 
                             cantidadProcesada++;
@@ -866,5 +1446,199 @@ namespace WATickets.Controllers
                 );
             }
         }
+        [HttpPost]
+        [Route("api/Tiquetes/Unificar")]
+        public HttpResponseMessage UnificarTiquetes(
+    [FromBody] UnificarTiquetesRequest solicitud)
+        {
+            if (solicitud == null)
+            {
+                return Request.CreateResponse(
+                    HttpStatusCode.BadRequest,
+                    "Debe indicar los tiquetes que desea unificar."
+                );
+            }
+
+            if (solicitud.TicketPrincipalId <= 0 ||
+                solicitud.TicketSecundarioId <= 0)
+            {
+                return Request.CreateResponse(
+                    HttpStatusCode.BadRequest,
+                    "Los números de tiquete no son válidos."
+                );
+            }
+
+            if (solicitud.TicketPrincipalId ==
+                solicitud.TicketSecundarioId)
+            {
+                return Request.CreateResponse(
+                    HttpStatusCode.BadRequest,
+                    "No puede unificar un tiquete consigo mismo."
+                );
+            }
+
+            using (var transaccion = db.Database.BeginTransaction())
+            {
+                try
+                {
+                    var principal = db.Tickets.FirstOrDefault(
+                        t => t.id == solicitud.TicketPrincipalId
+                    );
+
+                    var secundario = db.Tickets.FirstOrDefault(
+                        t => t.id == solicitud.TicketSecundarioId
+                    );
+
+                    if (principal == null)
+                    {
+                        return Request.CreateResponse(
+                            HttpStatusCode.NotFound,
+                            "No se encontró el tiquete principal."
+                        );
+                    }
+
+                    if (secundario == null)
+                    {
+                        return Request.CreateResponse(
+                            HttpStatusCode.NotFound,
+                            "No se encontró el tiquete secundario."
+                        );
+                    }
+
+                    if (principal.TicketPrincipalId.HasValue)
+                    {
+                        return Request.CreateResponse(
+                            HttpStatusCode.BadRequest,
+                            "El tiquete seleccionado como principal ya fue unificado con otro."
+                        );
+                    }
+
+                    if (secundario.TicketPrincipalId.HasValue)
+                    {
+                        return Request.CreateResponse(
+                            HttpStatusCode.BadRequest,
+                            "El tiquete secundario ya fue unificado anteriormente."
+                        );
+                    }
+
+                    /*
+                     * Guardar el mensaje original del tiquete secundario
+                     * dentro del historial del principal.
+                     */
+                    var mensajeOriginal = new Respuestas
+                    {
+                        idTicket = principal.id,
+                        idUsuario = 0,
+                        Respuesta =
+                            "<div>" +
+                            "<strong>Mensaje original del tiquete #" +
+                            secundario.id +
+                            ":</strong><br><br>" +
+                            (secundario.Mensaje ?? "") +
+                            "</div>",
+                        EsNotaInterna = true,
+                        FechaCreacion =
+                            secundario.FechaTicket ?? DateTime.Now
+                    };
+
+                    db.Respuestas.Add(mensajeOriginal);
+
+                    /*
+                     * Mover las respuestas del tiquete secundario
+                     * hacia el principal.
+                     */
+                    var respuestasSecundarias = db.Respuestas
+                        .Where(r => r.idTicket == secundario.id)
+                        .ToList();
+
+                    foreach (var respuesta in respuestasSecundarias)
+                    {
+                        respuesta.idTicket = principal.id;
+                    }
+
+                    /*
+                     * Mover todos los adjuntos hacia el principal.
+                     */
+                    var adjuntosSecundarios = db.Adjuntos
+                        .Where(a => a.idTicket == secundario.id)
+                        .ToList();
+
+                    foreach (var adjunto in adjuntosSecundarios)
+                    {
+                        adjunto.idTicket = principal.id;
+                    }
+
+                    /*
+                     * Registrar la unificación en el historial.
+                     */
+                    db.Respuestas.Add(new Respuestas
+                    {
+                        idTicket = principal.id,
+                        idUsuario = 0,
+                        Respuesta =
+                            "<div><strong>Tiquete unificado:</strong> " +
+                            "el tiquete #" +
+                            secundario.id +
+                            " fue unificado con este tiquete.</div>",
+                        EsNotaInterna = true,
+                        FechaCreacion = DateTime.Now
+                    });
+
+                    /*
+                     * Cerrar y vincular el tiquete secundario.
+                     */
+                    secundario.TicketPrincipalId = principal.id;
+                    secundario.Status = "C";
+                    secundario.FechaCierre = DateTime.Now;
+
+                    db.SaveChanges();
+                    transaccion.Commit();
+
+                    return Request.CreateResponse(
+                        HttpStatusCode.OK,
+                        new
+                        {
+                            correcto = true,
+                            ticketPrincipalId = principal.id,
+                            ticketSecundarioId = secundario.id,
+                            respuestasMovidas = respuestasSecundarias.Count,
+                            adjuntosMovidos = adjuntosSecundarios.Count,
+                            mensaje =
+                                "Los tiquetes fueron unificados correctamente."
+                        }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    transaccion.Rollback();
+
+                    var bitacora = new BitacoraErrores
+                    {
+                        Descripcion = ex.Message,
+                        StackTrace = ex.StackTrace,
+                        Fecha = DateTime.Now,
+                        JSON = JsonConvert.SerializeObject(ex)
+                    };
+
+                    using (var dbBitacora = new ModelCliente())
+                    {
+                        dbBitacora.BitacoraErrores.Add(bitacora);
+                        dbBitacora.SaveChanges();
+                    }
+
+                    return Request.CreateResponse(
+                        HttpStatusCode.InternalServerError,
+                        "No fue posible unificar los tiquetes."
+                    );
+                }
+            }
+        }
+      
+    }
+    public class UnificarTiquetesRequest
+    {
+        public int TicketPrincipalId { get; set; }
+
+        public int TicketSecundarioId { get; set; }
     }
 }

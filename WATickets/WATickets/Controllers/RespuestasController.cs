@@ -130,7 +130,7 @@ namespace WATickets.Controllers
         //Enviar respuesta al correo de la persona que creó el ticket
         [HttpGet]
         [Route("api/Respuestas/EnviarCorreo")]
-        public HttpResponseMessage GetEnviarCorreo([FromUri] int id)
+        public HttpResponseMessage GetEnviarCorreo([FromUri] int id, [FromUri] string destinatarios)
         {
             try
             {
@@ -153,10 +153,53 @@ namespace WATickets.Controllers
                     throw new Exception("El ticket no se encuentra registrado");
                 }
 
-                if (string.IsNullOrEmpty(ticket.PersonaTicket))
+                var correos = (destinatarios ?? ticket.PersonaTicket ?? "")
+        .Split(
+            new[] { ';', ',' },
+            StringSplitOptions.RemoveEmptyEntries
+        )
+        .Select(x => x.Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+                if (correos.Count == 0)
                 {
-                    throw new Exception("El ticket no tiene un correo registrado");
+                    throw new Exception(
+                        "Debe indicar al menos un correo para enviar la respuesta."
+                    );
                 }
+
+                if (correos.Count > 20)
+                {
+                    throw new Exception(
+                        "No se pueden enviar más de 20 destinatarios."
+                    );
+                }
+
+                foreach (var correo in correos)
+                {
+                    try
+                    {
+                        var direccion = new MailAddress(correo);
+
+                        if (!string.Equals(
+                            direccion.Address,
+                            correo,
+                            StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new Exception();
+                        }
+                    }
+                    catch
+                    {
+                        throw new Exception(
+                            "El correo '" + correo + "' no es válido."
+                        );
+                    }
+                }
+
+                var correosEnvio = string.Join(";", correos);
 
                 var CorreoEnvio = db.CorreoEnvio.FirstOrDefault();
 
@@ -176,22 +219,56 @@ namespace WATickets.Controllers
                 html = html.Replace("@ID", ticket.id.ToString());
                 html = html.Replace("@ASUNTO", asuntoTicket);
                 html = html.Replace("@RESPUESTA", textoRespuesta);
+                var imagenesInline =
+                    PrepararImagenesInline(ref html);
 
-                var imagenesInline = PrepararImagenesInline(ref html);
+                var asuntoCorreo = ticket.Asunto == null
+                    ? ""
+                    : ticket.Asunto.Trim();
 
-                var asuntoCorreo = ticket.Asunto == null ? "" : ticket.Asunto.Trim();
-
-                if (!asuntoCorreo.StartsWith("RE:", StringComparison.OrdinalIgnoreCase))
+                if (!asuntoCorreo.StartsWith(
+                    "RE:",
+                    StringComparison.OrdinalIgnoreCase))
                 {
                     asuntoCorreo = "Re: " + asuntoCorreo;
                 }
 
-                G G = new G();
+                // Conserva las imágenes pegadas como imágenes dentro del correo.
+                var archivosCorreo = imagenesInline;
 
-                var resp = G.SendV2(ticket.PersonaTicket, "", "", CorreoEnvio.RecepcionEmail, "TICKETS", asuntoCorreo, html, CorreoEnvio.RecepcionHostName, CorreoEnvio.EnvioPort, CorreoEnvio.RecepcionUseSSL, CorreoEnvio.RecepcionEmail, CorreoEnvio.RecepcionPassword, imagenesInline, ticket.idCorreo);
+                // Agrega PDF, Excel, Word y demás archivos como adjuntos.
+                archivosCorreo.AddRange(
+             PrepararArchivosAdjuntos(ticket.id)
+         );
+
+                // Validar conjuntamente imágenes pegadas y archivos.
+                ValidarLimiteTotalCorreo(archivosCorreo);
+
+                var servicioCorreo = new G();
+
+                var resp = servicioCorreo.SendV2(
+                    correosEnvio,
+                    "",
+                    "",
+                    CorreoEnvio.RecepcionEmail,
+                    "TICKETS",
+                    asuntoCorreo,
+                    html,
+                    CorreoEnvio.RecepcionHostName,
+                    CorreoEnvio.EnvioPort,
+                    CorreoEnvio.RecepcionUseSSL,
+                    CorreoEnvio.RecepcionEmail,
+                    CorreoEnvio.RecepcionPassword,
+                    archivosCorreo,
+                    ticket.idCorreo
+                );
+
                 if (!resp)
                 {
-                    throw new Exception("No se ha podido enviar el correo a " + ticket.PersonaTicket);
+                    throw new Exception(
+                        "No se ha podido enviar el correo a " +
+                        string.Join(", ", correos)
+                    );
                 }
 
                 return Request.CreateResponse(HttpStatusCode.OK, respuesta);
@@ -208,7 +285,159 @@ namespace WATickets.Controllers
                 return Request.CreateResponse(HttpStatusCode.InternalServerError, ex);
             }
         }
+        private List<Attachment> PrepararArchivosAdjuntos(
+        int idTicket)
+        {
+            const long limiteTotal =
+                18L * 1024 * 1024;
 
+            var resultado = new List<Attachment>();
+            long tamanoAcumulado = 0;
+
+            var registros = db.Adjuntos
+                .Where(x => x.idTicket == idTicket)
+                .OrderByDescending(x => x.id)
+                .Take(5)
+                .ToList();
+
+            var expresion = new Regex(
+                @"^data:(?<tipo>[^;]+)" +
+                @"(?:;name=(?<nombre>[^;]+))?" +
+                @";base64,(?<contenido>.+)$",
+                RegexOptions.IgnoreCase |
+                RegexOptions.Singleline
+            );
+
+            foreach (var registro in registros)
+            {
+                if (string.IsNullOrWhiteSpace(
+                    registro.Adjunto))
+                {
+                    continue;
+                }
+
+                var coincidencia =
+                    expresion.Match(registro.Adjunto);
+
+                if (!coincidencia.Success)
+                {
+                    continue;
+                }
+
+                var tipo = coincidencia
+                    .Groups["tipo"]
+                    .Value
+                    .Trim();
+
+                var nombreCodificado = coincidencia
+                    .Groups["nombre"]
+                    .Value;
+
+                var nombre =
+                    string.IsNullOrWhiteSpace(nombreCodificado)
+                        ? "adjunto"
+                        : Uri.UnescapeDataString(
+                            nombreCodificado
+                        );
+
+                nombre = Path.GetFileName(nombre);
+
+                var base64 = Regex.Replace(
+                    coincidencia
+                        .Groups["contenido"]
+                        .Value,
+                    @"\s+",
+                    ""
+                );
+
+                byte[] bytes;
+
+                try
+                {
+                    bytes = Convert.FromBase64String(
+                        base64
+                    );
+                }
+                catch
+                {
+                    throw new Exception(
+                        "El archivo " + nombre +
+                        " tiene un formato inválido."
+                    );
+                }
+
+                if (bytes.Length == 0)
+                {
+                    continue;
+                }
+
+                if (bytes.Length > limiteTotal)
+                {
+                    throw new Exception(
+                        "El archivo " + nombre +
+                        " supera el límite permitido de 18 MB."
+                    );
+                }
+
+                tamanoAcumulado += bytes.Length;
+
+                if (tamanoAcumulado > limiteTotal)
+                {
+                    throw new Exception(
+                        "El total de archivos adjuntos supera " +
+                        "el límite permitido de 18 MB."
+                    );
+                }
+
+                resultado.Add(
+                    new Attachment(
+                        new MemoryStream(bytes),
+                        nombre,
+                        tipo
+                    )
+                );
+            }
+
+            return resultado;
+        }
+        private static void ValidarLimiteTotalCorreo(
+    IEnumerable<Attachment> archivos)
+        {
+            const long limiteTotal =
+                18L * 1024 * 1024;
+
+            long tamanoTotal = 0;
+
+            foreach (var archivo in archivos)
+            {
+                if (archivo?.ContentStream == null)
+                {
+                    continue;
+                }
+
+                if (!archivo.ContentStream.CanSeek)
+                {
+                    throw new Exception(
+                        "No fue posible comprobar el tamaño " +
+                        "de uno de los archivos."
+                    );
+                }
+
+                tamanoTotal +=
+                    archivo.ContentStream.Length;
+
+                if (tamanoTotal > limiteTotal)
+                {
+                    throw new Exception(
+                        "Las imágenes y archivos adjuntos " +
+                        "superan el límite total de 18 MB."
+                    );
+                }
+
+                // Dejar el archivo listo para que SendV2 lo lea.
+                archivo.ContentStream.Position = 0;
+            }
+        }
         private static string SanitizarContenidoRespuesta(string contenido)
         {
             if (string.IsNullOrWhiteSpace(contenido))
@@ -271,8 +500,13 @@ namespace WATickets.Controllers
 
                 var bytes = Convert.FromBase64String(base64);
 
-                if (bytes.Length > 5 * 1024 * 1024)
-                    throw new Exception("Una imagen pegada supera el límite permitido de 5 MB.");
+                if (bytes.Length > 18L * 1024 * 1024)
+                {
+                    throw new Exception(
+                        "Una imagen pegada supera el límite permitido de 18 MB."
+                    );
+                }
+
 
                 var contentId = "ticket-" + Guid.NewGuid().ToString("N");
                 var extension = contentType.Contains("png") ? ".png"

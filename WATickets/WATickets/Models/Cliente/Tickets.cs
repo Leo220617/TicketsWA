@@ -34,5 +34,7 @@ namespace WATickets.Models.Cliente
         public DateTime FechaCierre { get; set; }
         public string idCorreo { get; set; }
         public string Tipo { get; set; }
+        public Nullable<System.DateTime> FechaReapertura { get; set; }
+        public Nullable<int> TicketPrincipalId { get; set; }
     }
 }

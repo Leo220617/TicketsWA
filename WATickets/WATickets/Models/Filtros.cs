@@ -10,6 +10,7 @@ namespace WATickets.Models
         public string Texto { get; set; }
         public int Codigo1 { get; set; }
         public string Texto2 { get; set; }
+        public string Texto3 { get; set; }
         public int Codigo2 { get; set; }
 
         public DateTime FechaInicial { get; set; }

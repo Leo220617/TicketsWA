@@ -230,7 +230,9 @@
     <Compile Include="Controllers\ActividadesController.cs" />
     <Compile Include="Controllers\AdjuntosController.cs" />
     <Compile Include="Controllers\BitacoraErroresController.cs" />
+    <Compile Include="Controllers\CorreoEnvioController.cs" />
     <Compile Include="Controllers\CorreosRecepcionController.cs" />
+    <Compile Include="Controllers\DashboardTicketsController.cs" />
     <Compile Include="Controllers\EmpresasController.cs" />
     <Compile Include="Controllers\G.cs" />
     <Compile Include="Controllers\HomeController.cs" />
