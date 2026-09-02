@@ -19,6 +19,12 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Net.Mail;
 using System.Text.RegularExpressions;
 using System.Net.Mime;
+using MailKit;
+using MailKit.Net.Imap;
+using MimeKit;
+using MimeKit.Utils;
+using S22ImapClient = S22.Imap.ImapClient;
+using MimeImapClient = MailKit.Net.Imap.ImapClient;
 
 namespace WATickets.Controllers
 {
@@ -26,8 +32,7 @@ namespace WATickets.Controllers
     public class TiquetesController : ApiController
     {
         ModelCliente db = new ModelCliente();
-        private static List<Attachment> PrepararImagenesInlineTicket(
-    ref string html)
+        private static List<Attachment> PrepararImagenesInlineTicket(ref string html)
         {
             var imagenes = new List<Attachment>();
 
@@ -345,16 +350,49 @@ namespace WATickets.Controllers
 
                 foreach (var item in Correos)
                 {
-                    using (ImapClient client = new ImapClient(item.RecepcionHostName, (int)(item.RecepcionPort),
-                          item.RecepcionEmail, item.RecepcionPassword, AuthMethod.Login, (bool)(item.RecepcionUseSSL)))
+                    using (S22ImapClient client = new S22ImapClient(
+              item.RecepcionHostName,
+              (int)item.RecepcionPort,
+              item.RecepcionEmail,
+              item.RecepcionPassword,
+              AuthMethod.Login,
+              (bool)item.RecepcionUseSSL))
+                    using (MimeImapClient mimeClient =
+                        new MimeImapClient())
                     {
-                        IEnumerable<uint> uids = client.Search(SearchCondition.Unseen()).ToList();
+                        mimeClient.Connect(
+                            item.RecepcionHostName,
+                            (int)item.RecepcionPort,
+                            (bool)item.RecepcionUseSSL
+                        );
+
+                        mimeClient.Authenticate(
+                            item.RecepcionEmail,
+                            item.RecepcionPassword
+                        );
+
+                        var bandejaMime = mimeClient.Inbox;
+
+                        bandejaMime.Open(
+                            FolderAccess.ReadOnly
+                        );
+
+                        IEnumerable<uint> uids =
+                            client.Search(
+                                SearchCondition.Unseen()
+                            ).ToList();
 
                         foreach (var uid in uids)
                         {
-                            System.Net.Mail.MailMessage message = client.GetMessage(uid, false);
-                            byte[] ByteArrayPDF = new byte[0];
-                            var TipoAdjunto = "";
+                            byte[] ByteArrayPDF = Array.Empty<byte>();
+                            string TipoAdjunto = string.Empty;
+                            System.Net.Mail.MailMessage message =
+                                client.GetMessage(uid, false);
+
+                            MimeMessage mensajeMime =
+                                bandejaMime.GetMessage(
+                                    new UniqueId(uid)
+                                );
                             //try
                             //{
 
@@ -486,7 +524,10 @@ namespace WATickets.Controllers
 
                                 if (!respuestaExistente)
                                 {
-                                    var textoRespuesta = ObtenerUltimaRespuesta(message.Body);
+                                    var textoRespuesta =
+                   ObtenerCuerpoMimeConImagenes(
+                       mensajeMime
+                   );
 
                                     var tieneAdjuntos = message.Attachments != null &&
                       message.Attachments
@@ -499,23 +540,22 @@ namespace WATickets.Controllers
                                     if (!string.IsNullOrWhiteSpace(textoRespuesta) ||
                                         tieneAdjuntos)
                                     {
+                                        var contenidoRespuesta =
+         string.IsNullOrWhiteSpace(textoRespuesta)
+             ? "El cliente adjuntó uno o más archivos."
+             : textoRespuesta;
+
                                         var nuevaRespuesta = new Respuestas
                                         {
                                             idTicket = ticketRelacionado.id,
                                             idUsuario = 0,
 
                                             Respuesta =
-                       "<div>" +
-    (
-        string.IsNullOrWhiteSpace(textoRespuesta)
-            ? "El cliente adjuntó uno o más archivos."
-            : HttpUtility.HtmlEncode(textoRespuesta)
-                .Replace("\r\n", "<br>")
-                .Replace("\n", "<br>")
-    ) +
-                               "</div><!-- correo:" +
-    HttpUtility.HtmlEncode(messageId ?? "") +
-    " -->",
+                                                "<div class='correo-cliente'>" +
+                                                contenidoRespuesta +
+                                                "</div><!-- correo:" +
+                                                HttpUtility.HtmlEncode(messageId ?? "") +
+                                                " -->",
 
                                             EsNotaInterna = false,
                                             FechaCreacion = DateTime.Now
@@ -554,14 +594,21 @@ namespace WATickets.Controllers
 
                                 if (!bandejaExistente)
                                 {
+                                    var cuerpoCorreo =
+           ObtenerCuerpoMimeConImagenes(
+               mensajeMime
+           );
                                     var bandeja = new BandejaEntrada
                                     {
                                         Procesado = "0",
                                         FechaIngreso = DateTime.Now,
                                         Asunto = message.Subject,
                                         Mensaje = "",
-                                        Remitente = message.From.Address,
-                                        Texto = message.Body,
+                                        Remitente = ObtenerParticipantesCorreo(
+    message,
+    item.RecepcionEmail
+),
+                                        Texto = cuerpoCorreo,
                                         Adjuntos = ByteArrayPDF,
                                         TipoAdjunto = TipoAdjunto,
                                         idCorreo = messageId
@@ -610,7 +657,9 @@ namespace WATickets.Controllers
                     ti.PersonaTicket = item.Remitente;
                     ti.Status = "E";
                     ti.DuracionEstimada = "00:00:00";
-                    ti.idEmpresa = (db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault() == null ? 0 : db.Empresas.Where(a => item.Remitente.ToUpper().Contains(a.Dominio.ToUpper())).FirstOrDefault().id);
+                    var empresa = db.Empresas.ToList().FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Dominio) && !string.IsNullOrWhiteSpace(item.Remitente) && item.Remitente.IndexOf( a.Dominio, StringComparison.OrdinalIgnoreCase) >= 0 );
+
+                    ti.idEmpresa = empresa != null ? empresa.id: 0;
                     ti.Adjuntos = item.Adjuntos;
                     ti.TipoAdjunto = item.TipoAdjunto;
                     ti.idCorreo = item.idCorreo;
@@ -1289,22 +1338,45 @@ namespace WATickets.Controllers
 
                 foreach (var configuracion in correos)
                 {
-                    using (var client = new ImapClient(
-                        configuracion.RecepcionHostName,
-                        (int)configuracion.RecepcionPort,
-                        configuracion.RecepcionEmail,
-                        configuracion.RecepcionPassword,
-                        AuthMethod.Login,
-                        (bool)configuracion.RecepcionUseSSL))
+                    using (var client = new S22ImapClient(
+         configuracion.RecepcionHostName,
+         (int)configuracion.RecepcionPort,
+         configuracion.RecepcionEmail,
+         configuracion.RecepcionPassword,
+         AuthMethod.Login,
+         (bool)configuracion.RecepcionUseSSL))
+                    using (var mimeClient = new MimeImapClient())
                     {
+                        mimeClient.Connect(
+                            configuracion.RecepcionHostName,
+                            (int)configuracion.RecepcionPort,
+                            (bool)configuracion.RecepcionUseSSL
+                        );
+
+                        mimeClient.Authenticate(
+                            configuracion.RecepcionEmail,
+                            configuracion.RecepcionPassword
+                        );
+
+                        var bandejaMime = mimeClient.Inbox;
+
+                        bandejaMime.Open(
+                            FolderAccess.ReadOnly
+                        );
+
                         var uids = client
                             .Search(SearchCondition.Unseen())
                             .ToList();
 
                         foreach (var uid in uids)
                         {
+
                             // false evita marcar como leído antes de comprobarlo.
                             var mensaje = client.GetMessage(uid, false);
+                            var mensajeMime =
+    bandejaMime.GetMessage(
+        new UniqueId(uid)
+    );
 
                             var messageId =
                                 mensaje.Headers["Message-ID"] ?? "";
@@ -1346,7 +1418,9 @@ namespace WATickets.Controllers
                             }
 
                             var textoRespuesta =
-     ObtenerUltimaRespuesta(mensaje.Body);
+      ObtenerCuerpoMimeConImagenes(
+          mensajeMime
+      );
 
                             var tieneAdjuntos =
                                 mensaje.Attachments != null &&
@@ -1368,9 +1442,7 @@ namespace WATickets.Controllers
                             var contenidoRespuesta =
                                 string.IsNullOrWhiteSpace(textoRespuesta)
                                     ? "El cliente adjuntó uno o más archivos."
-                                    : HttpUtility.HtmlEncode(textoRespuesta)
-                                        .Replace("\r\n", "<br>")
-                                        .Replace("\n", "<br>");
+                                    : textoRespuesta;
 
                             var nuevaRespuesta = new Respuestas
                             {
@@ -1633,7 +1705,429 @@ namespace WATickets.Controllers
                 }
             }
         }
-      
+        private static string ObtenerCuerpoCorreoConImagenes(
+    MailMessage mensaje)
+        {
+            if (mensaje == null)
+            {
+                return string.Empty;
+            }
+
+            AlternateView vistaHtml = null;
+
+            if (mensaje.AlternateViews != null)
+            {
+                vistaHtml = mensaje.AlternateViews
+                    .Cast<AlternateView>()
+                    .FirstOrDefault(vista =>
+                        vista.ContentType != null &&
+                        string.Equals(
+                            vista.ContentType.MediaType,
+                            MediaTypeNames.Text.Html,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    );
+            }
+
+            string html;
+
+            if (vistaHtml != null)
+            {
+                html = LeerContenidoCorreo(
+                    vistaHtml.ContentStream,
+                    vistaHtml.ContentType?.CharSet
+                );
+
+                if (vistaHtml.LinkedResources != null)
+                {
+                    foreach (LinkedResource recurso in
+                        vistaHtml.LinkedResources)
+                    {
+                        html = ReemplazarRecursoInline(
+                            html,
+                            recurso.ContentId,
+                            recurso.ContentType?.MediaType,
+                            recurso.ContentStream
+                        );
+                    }
+                }
+            }
+            else if (mensaje.IsBodyHtml)
+            {
+                html = mensaje.Body ?? "";
+            }
+            else
+            {
+                html =
+                    "<div>" +
+                    HttpUtility.HtmlEncode(mensaje.Body ?? "")
+                        .Replace("\r\n", "<br>")
+                        .Replace("\n", "<br>") +
+                    "</div>";
+            }
+
+            if (mensaje.Attachments != null)
+            {
+                foreach (Attachment archivo in mensaje.Attachments)
+                {
+                    var tipoContenido =
+                        archivo.ContentType?.MediaType ?? "";
+
+                    var esImagen = tipoContenido.StartsWith(
+                        "image/",
+                        StringComparison.OrdinalIgnoreCase
+                    );
+
+                    if (!esImagen)
+                    {
+                        continue;
+                    }
+
+                    var contentId = archivo.ContentId;
+
+                    // Algunos proveedores no relacionan correctamente el
+                    // Content-ID del archivo con el cid utilizado en el HTML.
+                    if (string.IsNullOrWhiteSpace(contentId) ||
+       html.IndexOf(
+           "cid:" + contentId.Trim().Trim('<', '>'),
+           StringComparison.OrdinalIgnoreCase
+       ) < 0)
+                    {
+                        var coincidenciaCid = Regex.Match(
+                            html,
+                            @"cid:\s*<?([^""'\s>]+)>?",
+                            RegexOptions.IgnoreCase
+                        );
+
+                        if (coincidenciaCid.Success)
+                        {
+                            contentId = coincidenciaCid.Groups[1].Value;
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(contentId))
+                    {
+                        continue;
+                    }
+
+                    html = ReemplazarRecursoInline(
+                        html,
+                        contentId,
+                        tipoContenido,
+                        archivo.ContentStream
+                    );
+                }
+            }
+
+            return SanitizarHtmlCorreo(html);
+        }
+
+        private static string LeerContenidoCorreo(
+            Stream stream,
+            string charset)
+        {
+            if (stream == null)
+            {
+                return string.Empty;
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            Encoding encoding;
+
+            try
+            {
+                encoding = string.IsNullOrWhiteSpace(charset)
+                    ? Encoding.UTF8
+                    : Encoding.GetEncoding(charset);
+            }
+            catch
+            {
+                encoding = Encoding.UTF8;
+            }
+
+            string contenido;
+
+            using (var memoria = new MemoryStream())
+            {
+                stream.CopyTo(memoria);
+                contenido = encoding.GetString(memoria.ToArray());
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            return contenido;
+        }
+
+        private static string ReemplazarRecursoInline(
+            string html,
+            string contentId,
+            string tipoContenido,
+            Stream stream)
+        {
+            if (string.IsNullOrWhiteSpace(html) ||
+                string.IsNullOrWhiteSpace(contentId) ||
+                stream == null)
+            {
+                return html;
+            }
+
+            if (!string.IsNullOrWhiteSpace(tipoContenido) &&
+                !tipoContenido.StartsWith(
+                    "image/",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return html;
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            byte[] contenido;
+
+            using (var memoria = new MemoryStream())
+            {
+                stream.CopyTo(memoria);
+                contenido = memoria.ToArray();
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            if (contenido.Length == 0 ||
+                contenido.Length > 18L * 1024 * 1024)
+            {
+                return html;
+            }
+
+            if (string.IsNullOrWhiteSpace(tipoContenido))
+            {
+                tipoContenido = "image/png";
+            }
+
+            var idLimpio = contentId
+                .Trim()
+                .Trim('<', '>');
+
+            var dataUrl =
+                "data:" +
+                tipoContenido +
+                ";base64," +
+                Convert.ToBase64String(contenido);
+
+            html = Regex.Replace(
+                html,
+                @"cid:\s*<?" +
+                Regex.Escape(idLimpio) +
+                @">?",
+                dataUrl,
+                RegexOptions.IgnoreCase
+            );
+
+            return html;
+        }
+
+        private static string SanitizarHtmlCorreo(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return string.Empty;
+            }
+
+            // Eliminar elementos que pueden ejecutar contenido.
+            html = Regex.Replace(
+                html,
+                @"<(script|iframe|object|embed|form|style)[^>]*>[\s\S]*?</\1\s*>",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            html = Regex.Replace(
+                html,
+                @"<(script|iframe|object|embed|form|input|button|link|meta)[^>]*?/?>",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            // Eliminar atributos onclick, onerror, onload, etc.
+            html = Regex.Replace(
+                html,
+                @"\s+on[a-z]+\s*=\s*([""']).*?\1",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            html = Regex.Replace(
+                html,
+                @"\s+on[a-z]+\s*=\s*[^\s>]+",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            // Impedir enlaces javascript:.
+            html = Regex.Replace(
+                html,
+                @"javascript\s*:",
+                "",
+                RegexOptions.IgnoreCase
+            );
+
+            return html.Trim();
+        }
+        private static string ObtenerCuerpoMimeConImagenes(
+    MimeMessage mensaje)
+        {
+            if (mensaje == null)
+            {
+                return string.Empty;
+            }
+
+            string html = mensaje.HtmlBody;
+
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                html =
+                    "<div>" +
+                    HttpUtility.HtmlEncode(
+                        mensaje.TextBody ?? ""
+                    )
+                    .Replace("\r\n", "<br>")
+                    .Replace("\n", "<br>") +
+                    "</div>";
+            }
+
+            var recursosInline = mensaje.BodyParts
+                .OfType<MimePart>()
+                .Where(parte =>
+                    parte.ContentType != null &&
+                    string.Equals(
+                        parte.ContentType.MediaType,
+                        "image",
+                        StringComparison.OrdinalIgnoreCase
+                    ) &&
+                    !string.IsNullOrWhiteSpace(parte.ContentId)
+                )
+                .ToList();
+
+            foreach (var recurso in recursosInline)
+            {
+                try
+                {
+                    byte[] contenido;
+
+                    using (var memoria = new MemoryStream())
+                    {
+                        recurso.Content.DecodeTo(memoria);
+                        contenido = memoria.ToArray();
+                    }
+
+                    if (contenido.Length == 0 ||
+                        contenido.Length > 18L * 1024 * 1024)
+                    {
+                        continue;
+                    }
+
+                    var tipoContenido =
+                        recurso.ContentType.MimeType;
+
+                    if (string.IsNullOrWhiteSpace(tipoContenido))
+                    {
+                        tipoContenido = "image/png";
+                    }
+
+                    var contentId = recurso.ContentId
+                        .Trim()
+                        .Trim('<', '>');
+
+                    var dataUrl =
+                        "data:" +
+                        tipoContenido +
+                        ";base64," +
+                        Convert.ToBase64String(contenido);
+
+                    html = Regex.Replace(
+                        html,
+                        @"cid:\s*<?" +
+                        Regex.Escape(contentId) +
+                        @">?",
+                        dataUrl,
+                        RegexOptions.IgnoreCase
+                    );
+                }
+                catch
+                {
+                    // Si una imagen interna falla, continúa con las demás.
+                }
+            }
+
+            return SanitizarHtmlCorreo(html);
+        }
+
+        private static string ObtenerParticipantesCorreo(
+    MailMessage mensaje,
+    string correoBuzon)
+        {
+            if (mensaje == null)
+            {
+                return string.Empty;
+            }
+
+            var correos = new List<string>();
+
+            // La persona que envió el correo.
+            if (mensaje.From != null &&
+                !string.IsNullOrWhiteSpace(mensaje.From.Address))
+            {
+                correos.Add(mensaje.From.Address.Trim());
+            }
+
+            // Personas que venían en Para.
+            if (mensaje.To != null)
+            {
+                correos.AddRange(
+                    mensaje.To
+                        .Cast<MailAddress>()
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Address))
+                        .Select(x => x.Address.Trim())
+                );
+            }
+
+            // Personas que venían en Copia.
+            if (mensaje.CC != null)
+            {
+                correos.AddRange(
+                    mensaje.CC
+                        .Cast<MailAddress>()
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Address))
+                        .Select(x => x.Address.Trim())
+                );
+            }
+
+            // Eliminar el correo del propio buzón de soporte.
+            correos = correos
+                .Where(x =>
+                    string.IsNullOrWhiteSpace(correoBuzon) ||
+                    !string.Equals(
+                        x,
+                        correoBuzon,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return string.Join("; ", correos);
+        }
     }
     public class UnificarTiquetesRequest
     {
@@ -1642,3 +2136,4 @@ namespace WATickets.Controllers
         public int TicketSecundarioId { get; set; }
     }
 }
+

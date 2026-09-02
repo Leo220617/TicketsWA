@@ -84,6 +84,9 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
     <File Include="bin/BouncyCastle.Crypto.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
     </File>
+    <File Include="bin/BouncyCastle.Cryptography.dll">
+      <publishTime>07/31/2025 11:19:54</publishTime>
+    </File>
     <File Include="bin/DevOne.Security.Cryptography.BCrypt.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
     </File>
@@ -140,6 +143,15 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
     </File>
     <File Include="bin/es/System.Web.WebPages.resources.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
+    </File>
+    <File Include="bin/MailKit.dll">
+      <publishTime>05/26/2026 21:53:00</publishTime>
+    </File>
+    <File Include="bin/MailKit.dll.config">
+      <publishTime>05/26/2026 21:52:52</publishTime>
+    </File>
+    <File Include="bin/MailKit.pdb">
+      <publishTime>05/26/2026 21:53:00</publishTime>
     </File>
     <File Include="bin/Microsoft.AspNet.Identity.Core.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
@@ -269,6 +281,12 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
     </File>
     <File Include="bin/Microsoft.Web.Infrastructure.dll">
       <publishTime>08/13/2026 11:16:15</publishTime>
+    </File>
+    <File Include="bin/MimeKit.dll">
+      <publishTime>05/26/2026 20:14:28</publishTime>
+    </File>
+    <File Include="bin/MimeKit.pdb">
+      <publishTime>05/26/2026 20:14:28</publishTime>
     </File>
     <File Include="bin/Newtonsoft.Json.dll">
       <publishTime>08/13/2026 11:16:15</publishTime>
@@ -423,14 +441,35 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
     <File Include="bin/StreamJsonRpc.dll">
       <publishTime>09/10/2024 15:30:28</publishTime>
     </File>
+    <File Include="bin/System.Buffers.dll">
+      <publishTime>03/19/2025 20:55:38</publishTime>
+    </File>
+    <File Include="bin/System.Formats.Asn1.dll">
+      <publishTime>06/13/2024 19:44:14</publishTime>
+    </File>
     <File Include="bin/System.IdentityModel.Tokens.Jwt.dll">
       <publishTime>08/13/2026 11:16:15</publishTime>
+    </File>
+    <File Include="bin/System.Memory.dll">
+      <publishTime>04/03/2025 23:00:54</publishTime>
     </File>
     <File Include="bin/System.Net.Http.Formatting.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
     </File>
+    <File Include="bin/System.Numerics.Vectors.dll">
+      <publishTime>03/19/2025 20:55:42</publishTime>
+    </File>
+    <File Include="bin/System.Runtime.CompilerServices.Unsafe.dll">
+      <publishTime>04/03/2025 23:00:52</publishTime>
+    </File>
     <File Include="bin/System.Threading.Tasks.Dataflow.dll">
       <publishTime>09/10/2024 15:30:56</publishTime>
+    </File>
+    <File Include="bin/System.Threading.Tasks.Extensions.dll">
+      <publishTime>04/03/2025 23:00:52</publishTime>
+    </File>
+    <File Include="bin/System.ValueTuple.dll">
+      <publishTime>05/15/2018 13:29:52</publishTime>
     </File>
     <File Include="bin/System.Web.Cors.dll">
       <publishTime>08/13/2026 11:16:14</publishTime>
@@ -469,10 +508,10 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>09/10/2024 15:30:29</publishTime>
     </File>
     <File Include="bin/WATickets.dll">
-      <publishTime>08/26/2026 02:06:06</publishTime>
+      <publishTime>09/01/2026 10:43:44</publishTime>
     </File>
     <File Include="bin/WATickets.pdb">
-      <publishTime>08/26/2026 02:06:06</publishTime>
+      <publishTime>09/01/2026 10:43:44</publishTime>
     </File>
     <File Include="bin/WebGrease.dll">
       <publishTime>08/13/2026 11:16:15</publishTime>
@@ -568,7 +607,7 @@ edite el archivo MSBuild. Visite https://go.microsoft.com/fwlink/?LinkID=208121 
       <publishTime>08/13/2026 11:16:13</publishTime>
     </File>
     <File Include="Web.config">
-      <publishTime>08/18/2026 20:16:54</publishTime>
+      <publishTime>09/01/2026 10:43:45</publishTime>
     </File>
   </ItemGroup>
 </Project>
