@@ -1984,29 +1984,26 @@ namespace WATickets.Controllers
 
             return html.Trim();
         }
-        private static string ObtenerCuerpoMimeConImagenes(
-    MimeMessage mensaje)
+        private static string ObtenerCuerpoMimeConImagenes(MimeMessage mensaje)
         {
             if (mensaje == null)
             {
                 return string.Empty;
             }
 
-            string html = mensaje.HtmlBody;
+            var html = mensaje.HtmlBody;
 
             if (string.IsNullOrWhiteSpace(html))
             {
-                html =
-                    "<div>" +
-                    HttpUtility.HtmlEncode(
-                        mensaje.TextBody ?? ""
-                    )
+                html = HttpUtility.HtmlEncode(mensaje.TextBody ?? string.Empty)
                     .Replace("\r\n", "<br>")
-                    .Replace("\n", "<br>") +
-                    "</div>";
+                    .Replace("\r", "<br>")
+                    .Replace("\n", "<br>");
             }
 
-            var recursosInline = mensaje.BodyParts
+            var imagenesAdjuntas = new StringBuilder();
+
+            var imagenesMime = mensaje.BodyParts
                 .OfType<MimePart>()
                 .Where(parte =>
                     parte.ContentType != null &&
@@ -2014,12 +2011,10 @@ namespace WATickets.Controllers
                         parte.ContentType.MediaType,
                         "image",
                         StringComparison.OrdinalIgnoreCase
-                    ) &&
-                    !string.IsNullOrWhiteSpace(parte.ContentId)
-                )
+                    ))
                 .ToList();
 
-            foreach (var recurso in recursosInline)
+            foreach (var imagen in imagenesMime)
             {
                 try
                 {
@@ -2027,7 +2022,7 @@ namespace WATickets.Controllers
 
                     using (var memoria = new MemoryStream())
                     {
-                        recurso.Content.DecodeTo(memoria);
+                        imagen.Content.DecodeTo(memoria);
                         contenido = memoria.ToArray();
                     }
 
@@ -2037,41 +2032,152 @@ namespace WATickets.Controllers
                         continue;
                     }
 
-                    var tipoContenido =
-                        recurso.ContentType.MimeType;
+                    var tipoContenido = imagen.ContentType.MimeType;
 
                     if (string.IsNullOrWhiteSpace(tipoContenido))
                     {
                         tipoContenido = "image/png";
                     }
 
-                    var contentId = recurso.ContentId
+                    var dataUrl =
+                        "data:" + tipoContenido + ";base64," +
+                        Convert.ToBase64String(contenido);
+
+                    var contentId = (imagen.ContentId ?? string.Empty)
                         .Trim()
                         .Trim('<', '>');
 
-                    var dataUrl =
-                        "data:" +
-                        tipoContenido +
-                        ";base64," +
-                        Convert.ToBase64String(contenido);
+                    var contentLocation = imagen.ContentLocation == null
+                        ? string.Empty
+                        : imagen.ContentLocation.ToString();
 
-                    html = Regex.Replace(
-                        html,
-                        @"cid:\s*<?" +
-                        Regex.Escape(contentId) +
-                        @">?",
-                        dataUrl,
-                        RegexOptions.IgnoreCase
-                    );
+                    var estabaReferenciada = false;
+
+                    if (!string.IsNullOrWhiteSpace(contentId))
+                    {
+                        var patronMarcador =
+                            @"\[\s*cid:\s*<?" +
+                            Regex.Escape(contentId) +
+                            @">?\s*\]";
+
+                        var patronCid =
+                            @"cid:\s*<?" +
+                            Regex.Escape(contentId) +
+                            @">?";
+
+                        estabaReferenciada =
+                            Regex.IsMatch(
+                                html,
+                                patronMarcador,
+                                RegexOptions.IgnoreCase
+                            ) ||
+                            Regex.IsMatch(
+                                html,
+                                patronCid,
+                                RegexOptions.IgnoreCase
+                            );
+
+                        // Outlook en texto plano: [cid:image001.jpg@...]
+                        html = Regex.Replace(
+                            html,
+                            patronMarcador,
+                            match => CrearEtiquetaImagen(
+                                dataUrl,
+                                imagen.FileName
+                            ),
+                            RegexOptions.IgnoreCase
+                        );
+
+                        // HTML normal: <img src="cid:image001.jpg@...">
+                        html = Regex.Replace(
+                            html,
+                            patronCid,
+                            match => dataUrl,
+                            RegexOptions.IgnoreCase
+                        );
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(contentLocation))
+                    {
+                        if (html.IndexOf(
+                                contentLocation,
+                                StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            estabaReferenciada = true;
+                        }
+
+                        html = Regex.Replace(
+                            html,
+                            Regex.Escape(contentLocation),
+                            match => dataUrl,
+                            RegexOptions.IgnoreCase
+                        );
+                    }
+
+                    /*
+                     * Una imagen marcada como adjunto no necesariamente aparece
+                     * mediante cid: en el cuerpo. En ese caso se muestra al final
+                     * del correo y GuardarAdjuntosDelCorreo también la conservará
+                     * como archivo descargable.
+                     */
+                    if (!estabaReferenciada && imagen.IsAttachment)
+                    {
+                        imagenesAdjuntas.Append(
+                            CrearEtiquetaImagen(
+                                dataUrl,
+                                imagen.FileName
+                            )
+                        );
+                    }
                 }
                 catch
                 {
-                    // Si una imagen interna falla, continúa con las demás.
+                    // Una imagen dañada no debe impedir recibir el correo.
                 }
             }
 
+            if (imagenesAdjuntas.Length > 0)
+            {
+                html +=
+                    "<div class=\"imagenes-adjuntas-correo\">" +
+                    "<hr><p><strong>Imágenes adjuntas</strong></p>" +
+                    imagenesAdjuntas +
+                    "</div>";
+            }
+
+            // Ocultar únicamente los CID que definitivamente no se resolvieron.
+            html = Regex.Replace(
+                html,
+                @"\[\s*cid:[^\]]+\]",
+                "<span class=\"text-muted\">" +
+                "[Imagen del correo no disponible]" +
+                "</span>",
+                RegexOptions.IgnoreCase
+            );
+
             return SanitizarHtmlCorreo(html);
         }
+
+        private static string CrearEtiquetaImagen(
+            string dataUrl,
+            string nombreArchivo)
+        {
+            var nombreSeguro = HttpUtility.HtmlAttributeEncode(
+                string.IsNullOrWhiteSpace(nombreArchivo)
+                    ? "Imagen del correo"
+                    : nombreArchivo
+            );
+
+            return
+                "<figure class=\"imagen-correo-contenedor\">" +
+                "<img src=\"" + dataUrl + "\" " +
+                "alt=\"" + nombreSeguro + "\" " +
+                "class=\"imagen-correo-inline\" " +
+                "style=\"max-width:100%;height:auto;" +
+                "display:block;margin:10px 0;\">" +
+                "</figure>";
+        }
+
 
         private static string ObtenerParticipantesCorreo(
     MailMessage mensaje,
