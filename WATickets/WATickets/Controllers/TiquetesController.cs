@@ -494,13 +494,16 @@ namespace WATickets.Controllers
                             var inReplyTo = message.Headers["In-Reply-To"] ?? "";
                             var references = message.Headers["References"] ?? "";
 
-                            var ticketRelacionado = db.Tickets
-          .Where(t => t.idCorreo != null && t.idCorreo != "")
-          .ToList()
-          .FirstOrDefault(t =>
-              inReplyTo.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0 ||
-              references.IndexOf(t.idCorreo, StringComparison.OrdinalIgnoreCase) >= 0
-          );
+                            var replyTo = inReplyTo ?? string.Empty;
+                            var referencias = references ?? string.Empty;
+
+                            var ticketRelacionado = db.Tickets.FirstOrDefault(t => t.idCorreo != null &&
+                                    t.idCorreo != "" &&
+                                    (
+                                        replyTo.Contains(t.idCorreo) ||
+                                        referencias.Contains(t.idCorreo)
+                                    )
+                                );
 
                             if (ticketRelacionado != null &&
        ticketRelacionado.TicketPrincipalId.HasValue)
