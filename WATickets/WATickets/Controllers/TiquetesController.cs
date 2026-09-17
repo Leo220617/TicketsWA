@@ -389,6 +389,19 @@ namespace WATickets.Controllers
                             System.Net.Mail.MailMessage message =
                                 client.GetMessage(uid, false);
 
+                            // IGNORAR CORREOS ENVIADOS POR EL MISMO BUZÓN
+                            var correoRemitente = message.From?.Address?.Trim();
+
+                            if (!string.IsNullOrWhiteSpace(correoRemitente) &&
+                                correoRemitente.Equals(
+                                    item.RecepcionEmail,
+                                    StringComparison.OrdinalIgnoreCase))
+                            {
+                                client.GetMessage(uid, true);
+                                continue;
+                            }
+
+
                             MimeMessage mensajeMime =
                                 bandejaMime.GetMessage(
                                     new UniqueId(uid)
@@ -660,7 +673,17 @@ namespace WATickets.Controllers
                     ti.PersonaTicket = item.Remitente;
                     ti.Status = "E";
                     ti.DuracionEstimada = "00:00:00";
-                    var empresa = db.Empresas.ToList().FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Dominio) && !string.IsNullOrWhiteSpace(item.Remitente) && item.Remitente.IndexOf( a.Dominio, StringComparison.OrdinalIgnoreCase) >= 0 );
+                    var primerRemitente = item.Remitente?
+      .Split(';')[0]
+      .Trim();
+
+                    var empresa = db.Empresas
+                        .ToList()
+                        .FirstOrDefault(a =>
+                            !string.IsNullOrWhiteSpace(a.Dominio) &&
+                            !string.IsNullOrWhiteSpace(primerRemitente) &&
+                            primerRemitente.IndexOf(a.Dominio, StringComparison.OrdinalIgnoreCase) >= 0
+                        );
 
                     ti.idEmpresa = empresa != null ? empresa.id: 0;
                     ti.Adjuntos = item.Adjuntos;
@@ -1376,6 +1399,17 @@ namespace WATickets.Controllers
 
                             // false evita marcar como leído antes de comprobarlo.
                             var mensaje = client.GetMessage(uid, false);
+
+                            var correoRemitente = mensaje.From?.Address?.Trim();
+
+                            if (!string.IsNullOrWhiteSpace(correoRemitente) &&
+                                correoRemitente.Equals(
+                                    configuracion.RecepcionEmail,
+                                    StringComparison.OrdinalIgnoreCase))
+                            {
+                                client.GetMessage(uid, true);
+                                continue;
+                            }
                             var mensajeMime =
     bandejaMime.GetMessage(
         new UniqueId(uid)

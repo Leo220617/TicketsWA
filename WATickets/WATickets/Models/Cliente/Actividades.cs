@@ -25,5 +25,6 @@ namespace WATickets.Models.Cliente
         public DateTime fechaCreacion { get; set; }  
 
         public string estado { get; set; }
+        public decimal horas { get; set; }
     }
 }

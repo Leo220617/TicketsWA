@@ -74,6 +74,7 @@ namespace WATickets.Controllers
                         a.fechaCreacion,
                         a.estado,
                         a.comentario,
+                        a.horas,
 
                         NomUsuario = db.Login
                             .Where(u => u.id == a.idUsuario)
@@ -106,7 +107,7 @@ namespace WATickets.Controllers
                         NomUsuario = a.NomUsuario ?? "Sin asignar",
                         NomEmpresa = a.NomEmpresa ?? "Sin empresa",
                         NomActividad = a.NomActividad ?? "Actividad",
-
+                        horas = a.horas,
                         start = a.fechaAgendada,
 
                         title =
@@ -128,7 +129,8 @@ namespace WATickets.Controllers
                             comentario = a.comentario ?? "",
                             usuario = a.NomUsuario ?? "Sin asignar",
                             empresa = a.NomEmpresa ?? "Sin empresa",
-                            actividad = a.NomActividad ?? "Actividad"
+                            actividad = a.NomActividad ?? "Actividad",
+                            horas = a.horas
                         }
                     })
                     .ToList();
@@ -209,7 +211,8 @@ namespace WATickets.Controllers
                     act.fechaAgendada = t.fechaAgendada;
                     act.fechaCreacion = DateTime.Now;
                     act.estado = "Pendiente";
-                    act.comentario = t.comentario; 
+                    act.comentario = t.comentario;
+                    act.horas = t.horas;
                     db.Actividades.Add(act);
                     db.SaveChanges();
 
@@ -293,6 +296,11 @@ namespace WATickets.Controllers
                 if (modelo.comentario != null)
                 {
                     actividad.comentario = modelo.comentario;
+                }
+
+                if(modelo.horas != actividad.horas && modelo.horas > 0)
+                {
+                    actividad.horas = modelo.horas;
                 }
 
                 db.SaveChanges();
