@@ -75,7 +75,8 @@ namespace WATickets.Controllers
                         a.estado,
                         a.comentario,
                         a.horas,
-
+                        a.horaInicio,
+                        a.horaFinal,
                         NomUsuario = db.Login
                             .Where(u => u.id == a.idUsuario)
                             .Select(u => u.Nombre)
@@ -108,7 +109,13 @@ namespace WATickets.Controllers
                         NomEmpresa = a.NomEmpresa ?? "Sin empresa",
                         NomActividad = a.NomActividad ?? "Actividad",
                         horas = a.horas,
-                        start = a.fechaAgendada,
+                        start = a.horaInicio.HasValue
+    ? a.fechaAgendada.Date + a.horaInicio.Value
+    : a.fechaAgendada,
+
+                        end = a.horaFinal.HasValue
+    ? a.fechaAgendada.Date + a.horaFinal.Value
+    : a.fechaAgendada.Date.AddHours((double)a.horas),
 
                         title =
                             (a.NomUsuario ?? "Sin asignar") +
@@ -213,6 +220,8 @@ namespace WATickets.Controllers
                     act.estado = "Pendiente";
                     act.comentario = t.comentario;
                     act.horas = t.horas;
+                    act.horaInicio = t.horaInicio;
+                    act.horaFinal = t.horaFinal;
                     db.Actividades.Add(act);
                     db.SaveChanges();
 
@@ -302,7 +311,19 @@ namespace WATickets.Controllers
                 {
                     actividad.horas = modelo.horas;
                 }
+                if (modelo.horaInicio.HasValue)
+                {
+                    actividad.horaInicio = modelo.horaInicio;
+                }
 
+                if (modelo.horaFinal.HasValue)
+                {
+                    actividad.horaFinal = modelo.horaFinal;
+                }
+                if (modelo.idEmpresa > 0)
+                {
+                    actividad.idEmpresa = modelo.idEmpresa;
+                }
                 db.SaveChanges();
 
                 return Request.CreateResponse(

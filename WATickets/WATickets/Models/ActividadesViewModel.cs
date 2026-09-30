@@ -22,6 +22,8 @@ namespace WATickets.Models
 
         public string estado { get; set; }
         public decimal horas { get; set; }
+        public TimeSpan? horaInicio { get; set; }
+        public TimeSpan? horaFinal { get; set; }
         public List<AdjuntosActividades> adjuntos_actividades { get; set; }
 
     }
