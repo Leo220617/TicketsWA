@@ -462,13 +462,13 @@ namespace WATickets.Controllers
                                             .ToLowerInvariant();
 
                                         string[] extensionesPermitidas =
-                                        {
-                "png", "jpg", "jpeg",
-                "pdf",
-                "xls", "xlsx",
-                "doc", "docx",
-                "csv"
-            };
+           {
+    "png", "jpg", "jpeg",
+    "pdf",
+    "xls", "xlsx",
+    "doc", "docx",
+    "csv", "txt"
+};
 
                                         if (!extensionesPermitidas.Contains(TipoAdjunto))
                                         {
@@ -1105,7 +1105,11 @@ namespace WATickets.Controllers
                 ticket.Comentarios = t.Comentarios;
                 ticket.idEmpresa = t.idEmpresa;
                 ticket.DuracionEstimada = t.DuracionEstimada;
-                ticket.Status = t.Status;
+                if(t.Status != null)
+                {
+                    ticket.Status = t.Status;
+                }
+          
                 ticket.Tipo = t.Tipo;
 
                 if (seEstaCerrando)
