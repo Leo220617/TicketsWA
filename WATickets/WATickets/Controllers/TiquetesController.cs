@@ -663,71 +663,86 @@ namespace WATickets.Controllers
 
                 foreach (var item in Lista)
                 {
-                    Tickets ti = new Tickets();
-                    ti.FechaTicket = item.FechaIngreso;
-                    ti.Asunto = item.Asunto;
-                    ti.Mensaje = item.Texto;
-                    ti.Comentarios = "";
-                    ti.idLoginAsignado = 0;
-                    ti.Duracion = "00:00:00";
-                    ti.PersonaTicket = item.Remitente;
-                    ti.Status = "E";
-                    ti.DuracionEstimada = "00:00:00";
-                    var primerRemitente = item.Remitente?
-      .Split(';')[0]
-      .Trim();
-
-                    var empresa = db.Empresas
-                        .ToList()
-                        .FirstOrDefault(a =>
-                            !string.IsNullOrWhiteSpace(a.Dominio) &&
-                            !string.IsNullOrWhiteSpace(primerRemitente) &&
-                            primerRemitente.IndexOf(a.Dominio, StringComparison.OrdinalIgnoreCase) >= 0
-                        );
-
-                    ti.idEmpresa = empresa != null ? empresa.id: 0;
-                    ti.Adjuntos = item.Adjuntos;
-                    ti.TipoAdjunto = item.TipoAdjunto;
-                    ti.idCorreo = item.idCorreo;
-                    ti.FechaCierre = DateTime.Now;
-                    db.Tickets.Add(ti);
-                    db.SaveChanges();
-
-                    // Guardar el archivo recibido en la tabla de adjuntos.
-                    if (item.Adjuntos != null &&
-                        item.Adjuntos.Length > 0)
+                    try
                     {
-                        var extension = (item.TipoAdjunto ?? "")
-                            .Trim()
-                            .TrimStart('.')
-                            .ToLowerInvariant();
+                        Tickets ti = new Tickets();
+                        ti.FechaTicket = item.FechaIngreso;
+                        ti.Asunto = item.Asunto;
+                        ti.Mensaje = item.Texto;
+                        ti.Comentarios = "";
+                        ti.idLoginAsignado = 0;
+                        ti.Duracion = "00:00:00";
+                        ti.PersonaTicket = item.Remitente;
+                        ti.Status = "E";
+                        ti.DuracionEstimada = "00:00:00";
+                        var primerRemitente = item.Remitente?
+          .Split(';')[0]
+          .Trim();
 
-                        var tipoContenido = ObtenerTipoContenido(extension);
+                        var empresa = db.Empresas
+                            .ToList()
+                            .FirstOrDefault(a =>
+                                !string.IsNullOrWhiteSpace(a.Dominio) &&
+                                !string.IsNullOrWhiteSpace(primerRemitente) &&
+                                primerRemitente.IndexOf(a.Dominio, StringComparison.OrdinalIgnoreCase) >= 0
+                            );
 
-                        var nombreArchivo = string.IsNullOrWhiteSpace(extension)
-                            ? "archivo"
-                            : "archivo-recibido." + extension;
+                        ti.idEmpresa = empresa != null ? empresa.id : 0;
+                        ti.Adjuntos = item.Adjuntos;
+                        ti.TipoAdjunto = item.TipoAdjunto;
+                        ti.idCorreo = item.idCorreo;
+                        ti.FechaCierre = DateTime.Now;
+                        db.Tickets.Add(ti);
+                        db.SaveChanges();
 
-                        var adjuntoDataUrl =
-                            "data:" + tipoContenido +
-                            ";name=" + Uri.EscapeDataString(nombreArchivo) +
-                            ";base64," +
-                            Convert.ToBase64String(item.Adjuntos);
-
-                        db.Adjuntos.Add(new Adjuntos
+                        // Guardar el archivo recibido en la tabla de adjuntos.
+                        if (item.Adjuntos != null &&
+                            item.Adjuntos.Length > 0)
                         {
-                            idTicket = ti.id,
-                            Adjunto = adjuntoDataUrl
-                        });
+                            var extension = (item.TipoAdjunto ?? "")
+                                .Trim()
+                                .TrimStart('.')
+                                .ToLowerInvariant();
 
+                            var tipoContenido = ObtenerTipoContenido(extension);
+
+                            var nombreArchivo = string.IsNullOrWhiteSpace(extension)
+                                ? "archivo"
+                                : "archivo-recibido." + extension;
+
+                            var adjuntoDataUrl =
+                                "data:" + tipoContenido +
+                                ";name=" + Uri.EscapeDataString(nombreArchivo) +
+                                ";base64," +
+                                Convert.ToBase64String(item.Adjuntos);
+
+                            db.Adjuntos.Add(new Adjuntos
+                            {
+                                idTicket = ti.id,
+                                Adjunto = adjuntoDataUrl
+                            });
+
+                            db.SaveChanges();
+                        }
+
+                        db.Entry(item).State = EntityState.Modified;
+                        item.FechaProcesado = DateTime.Now;
+                        item.Procesado = "1";
+                        item.Mensaje = "";
                         db.SaveChanges();
                     }
+                    catch (Exception ex)
+                    {
 
-                    db.Entry(item).State = EntityState.Modified;
-                    item.FechaProcesado = DateTime.Now;
-                    item.Procesado = "1";
-                    item.Mensaje = "";
-                    db.SaveChanges();
+                        BitacoraErrores bt = new BitacoraErrores();
+                        bt.Descripcion = ex.Message;
+                        bt.StackTrace = ex.StackTrace;
+                        bt.Fecha = DateTime.Now;
+                        bt.JSON = JsonConvert.SerializeObject(ex);
+                        db.BitacoraErrores.Add(bt);
+                        db.SaveChanges();
+                    }
+                   
 
                 }
                 return Request.CreateResponse(HttpStatusCode.OK);
